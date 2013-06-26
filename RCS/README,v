@@ -1,0 +1,452 @@
+head	1.7;
+access;
+symbols;
+locks; strict;
+comment	@# @;
+
+
+1.7
+date	2005.09.20.19.26.37;	author rushing;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	2005.08.19.22.30.36;	author rushing;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	2005.06.02.01.21.09;	author rushing;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	2005.06.02.01.12.09;	author rushing;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	2005.06.01.22.25.39;	author rushing;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	2005.06.01.22.21.56;	author rushing;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	2005.06.01.22.21.37;	author rushing;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+1.7
+log
+@#
+@
+text
+@
+                     AVL Tree Objects for Python
+
+This package implements a dual-personality builtin object for Python,
+using AVL trees.  AVL trees (named after the inventors,
+Adel'son-Vel'skii and Landis) are balanced binary search trees, where
+the difference in height between any one node's left and right
+branches is kept less than or equal to one.  Whenever a key is
+inserted into a position in a way that would upset this balance, a
+'rotation' is performed.  These rotations happen less than half the
+time when inserting.  Deletion is similar, but may result in up to
+log(n) rotations.
+
+These trees can be used to implement dictionaries with fast lookup
+and deletion of any single item, but can also act like sequential
+lists. (In fact, the printed representation is just like that of a
+list).
+
+Each of the following operations can be done in O(log n) time:
+i)      Find an item having a given key
+ii)     Find the kth item, given k
+iii)    Insert an item at a specified place
+iv)     Delete a specified item
+
+Other operations are also possible in comparable time, including
+concatenation and splitting.
+
+Objects are inserted and deleted based on their order with respect to
+the builtin Python compare function, PyObject_Compare().
+The __getslice__ method is provided, and returns a list rather than
+a new tree object.
+
+Each node uses four pointers (key, left, right, parent) and a long
+(rank and balance), so the size overhead is probably comparable to
+that of Python's dictionary object [which uses two pointers and a long,
+and resizes whenever more than half full].  Another difference is that
+the dictionary object holds (key, value) pairs, but avl objects hold
+only single object (the key).
+
+The algorithms are taken directly from Knuth's "Art of Computer
+Programming, Volume 2: Searching and Sorting", and were prototyped
+using Python (avl_tree.py).  They were then translated directly into
+C (avl.c, avl.h), and a Python module wrapper was written (AVLmodule.c)
+
+Several of the newer methods rely on an interesting order analysis
+for the get_successor() and get_predecessor() functions in avl.c.
+If you're an analysis of algorithms guru, please take a look at the
+comments in avl_tree.py and check my work! 8^)
+
+The avl 'library' (avl.c, avl.h) contains nothing Python-specific, so
+it should be useful for other projects. (as if you'd want to after
+becoming a Python convert!).  However it was necessary to implement
+a few methods (getslice, concat) directly in AVLmodule.c.
+
+===========================================================================
+Building:
+
+Just the usual 
+
+  python setup.py install
+
+Uncomment the
+
+  #ext_macros = ['DEBUG_AVL']
+
+to get the debugging information. 
+
+===========================================================================
+Usage:
+
+>>> t = avl.newavl()
+>>> t
+[]
+>>> t.insert(50)
+>>> t
+[50]
+>>> t.insert(45)
+>>> t
+[45, 50]
+>>> t.remove(50)
+>>> t
+[45]
+
+>>> t = avl.newavl()
+>>> for x in range(20): t.insert(random.randint(0, 100))
+...
+>>> t
+[3, 8, 12, 15, 15, 29, 32, 42, 44, 48, 50, 53, 55, 57, 69, 74, 75, 76, 79, 81, 88]
+# if you've compiled in the debugging code (-DDEBUG_AVL)
+#
+# [Note: print_internal_structure() prints directly to stdout,
+#   so it doesn't work in pythonwin, but will work with the
+#   console-mode python.exe]
+
+>>> t.print_internal_structure()
+                                       +-[- 88 001]
+                          +-[/ 81 001]-|
+             +-[\ 79 008]-|
+             |            |                         +-[- 76 001]
+             |            |            +-[- 75 002]-|
+             |            |            |            +-[- 74 001]
+             |            +-[- 69 004]-|
+             |                         |            +-[- 57 001]
+             |                         +-[- 55 002]-|
+             |                                      +-[- 53 001]
++-[- 50 011]-|
+             |                                      +-[- 48 001]
+             |                         +-[/ 44 001]-|
+             |            +-[/ 42 002]-|
+             |            |            +-[- 32 001]
+             +-[- 29 006]-|
+                          |                        +-[- 15 001]
+                          |           +-[- 15 002]-|
+                          |           |            +-[- 12 001]
+                          +-[/ 8 002]-|
+                                      +-[- 3 001]
+
+# [now isn't that pretty?.]
+# FYI, the leftmost char in each node represents the 'balance factor'
+# for that node, whether the tree is heavy on the left ('\'), right
+# ('/'), or not at all ('-').  the middle item is 'repr(key)', and the
+# final number is the 'rank' of the node, used internally to quickly
+# locate a node of a certain index - it's the number of nodes in the
+# left subtree, plus one.
+
+# create a new tree from a list.
+# Note: this sorts the list as a side-effect, if you don't
+# want that, use a copy (i.e., 'l = avl.from_list(my_list[:])')
+
+>>> t = avl.newavl (range(30))
+>>> len(t)
+30
+>>>
+
+# You can address individual elements in the sequence:
+# Note: you cannot assign to the items in the tree, as
+# this might change the relative order of the keys.
+
+>>> t[25]
+25
+>>> t[-1]
+30
+
+# You can take slices of the list. The default slice
+# operation returns a new avl tree, not a list.
+# [If you want a list, use the slice_as_list() method]
+
+>>> random_tree[3:8]
+[45, 87, 29, 73, 12]
+>>> type(_)
+<type 'AVL tree'>
+
+# You can insert any python object:
+
+>>> t = avl.newavl(range(10))
+>>> t.insert('Hey, where will this go?')
+>>> t
+[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 'Hey, where will this go?']
+>>> 
+
+# is a certain element in the tree?
+
+>>> t.lookup (5)
+5
+>>> t.lookup (34)
+Traceback (innermost last):
+  File "<stdin>", line 1, in ?
+KeyError: 34
+>>> t.has_key (5)
+1
+>>> t.has_key (34)
+0
+>>>
+
+lookup is a little tricky, because it returns the first object in the
+tree that compares equal to the key you give.  For builtin objects,
+the builtin compare is used to order the tree, but by using your own
+objects with your own __cmp__ functions, you can do all sorts of
+interesting things.
+
+*** -------------------- Note --------------------***
+It is important that you not directly change an object stored in an
+avl tree in a way that would change its ordered position.  If you need
+to do this, first remove() the item, change it, then reinsert it!
+This is still very fast, as both operations are O(log n)
+
+The results of such an illegal modification are unspecified, and are
+likely to crash the program.  The only way to completely avoid this
+problem is to use only immutable types.  This restriction seemed too
+severe to enforce.  So be careful out there!
+*** -------------------- Note --------------------***
+
+# to copy a tree:
+>>> t2 = avl.newavl(t)
+
+# to concatenate two trees
+>>> t3 = t1 + t2
+# Note: this is the equivalent of creating a
+#  copy of t1, and then inserting all the elements
+#  of t2 in turn.
+
+# the 'repeat' operation (t1 * 5) is currently undefined
+# drop me a line if you need it. (and describe what you think
+# it should do)
+
+# ===========================================================================
+# release 2.0 (february 1997)
+# ===========================================================================
+Major changes to the C library have been applied for this version.
+The comparison function is now a member of the avl_tree structure,
+instead of being passed in with all of the API functions.  An extra
+'compare_arg' pointer is included to allow attaching 'state' to the
+compare function - this is a bit ugly, but was necessary to cleanly
+interface to python.
+
+Several new functions are visible from python, including two from
+David Ascher <david_ascher@@brown.edu> (at_least() and at_most()).
+
+# 't.span()' returns a pair of indices into the tree that 'span' the
+# given key or key pair.  For example:
+
+>>> t
+[1,2,3,4,5]
+>>> t.span(4)
+(3,4)
+>>> t[3:4]
+[4]
+>>> t = avl.newavl(map (lambda x: random.randint(0,1000), range(10)))
+>>> t
+[15, 34, 371, 536, 659, 691, 714, 754, 847, 936]
+>>> t.span(200,500)
+(2, 3)
+>>> t[2:3]
+[371]
+>>> t.span(300,700)
+(2, 6)
+>>> t[2:6]
+[371, 536, 659, 691]
+>>> 
+
+# at_least() returns the first object comparing greater to or equal to the <key> argument.
+
+>>> t.at_least (400)
+536
+
+# at_most() returns the first object comparing less than or equal to the <key> argument.
+>>> t.at_most (800)
+754
+
+# ===========================================================================
+# release 2.1.0 (Jun 2005)
+# ===========================================================================
+
+Berthold Höllmann finally spurs me into doing the long-awaited merge.
+
+# ===========================================================================
+# release 2.1.1 (Jun 2005)
+# ===========================================================================
+
+Lots of fixes/changes merged from various sources.
+
+Only one change in functionality:
+  insert_by_key() now returns the index of insertion.
+
+Thanks To:
+  Berthold Höllmann (modernization, 64-bit fixes, setup.py)
+  Charlie Kemp (another setup.py)
+  Paul Cameron (subtle bug when removing non-existent key )
+
+And From IronPort:
+  Martin Baker (made slicing match Python's, other changes)
+  Eric Huss (refcount touch-ups, lots of other work)
+  Sam Rushing
+
+# ===========================================================================
+# release 2.1.2 (Aug 2005)
+# ===========================================================================
+
+Fixed a bug reported by Kenneth Duda:
+
+  import avl
+  z = avl.newavl( None, lambda x,y: cmp(x[0],y[0]) )
+  z.insert('hello')
+  z.span('h')
+
+exceptions.SystemError: 'NULL object passed to Py_BuildValue'
+
+# ===========================================================================
+# release 2.1.3 (Sep 2005)
+# ===========================================================================
+
+Win32 compilation issue reported by Berthold Höllmann:
+
+  AVLmodule.c(855) : error C2099: initializer is not a constant
+@
+
+
+1.6
+log
+@2.1.2
+@
+text
+@d287 8
+@
+
+
+1.5
+log
+@fix typo
+@
+text
+@d219 1
+a219 1
+# 't.span()' returns a pair of indices into the three that 'span' the
+d274 13
+@
+
+
+1.4
+log
+@shout-outs
+@
+text
+@d189 1
+a189 1
+problem is to use only immutable types.  This restriction seemed to
+@
+
+
+1.3
+log
+@changed to reflect the move to distutils
+@
+text
+@d249 25
+@
+
+
+1.2
+log
+@untabify
+@
+text
+@d58 1
+a58 2
+Unix:
+First, cd $(AVL_LIB), then 'make libavl.a'
+d60 1
+a60 7
+Then copy AVLmodule.c into your Modules directory.
+add a few lines like this to your Python/Modules/Setup file.
+---------------------------------------------------------------------------
+# avl module
+AVL_LIB=/usr/src/other-homes/rushing/python/avl
+avl AVLmodule.o -DDEBUG_AVL -I$(AVL_LIB) -L$(AVL_LIB) -lavl
+---------------------------------------------------------------------------
+d62 1
+a62 2
+Win32:
+First, cd $(AVL_LIB), then 'nmake -f makefile_nt.msc avl.lib'
+d64 1
+a64 5
+add something like this to Python/Modules/makefile_nt.msc
+(or a separate makefile like in Demo/dl.nt)
+---------------------------------------------------------------------------
+# avl module
+AVL_LIB = \\squirl\rushing\python\avl
+d66 1
+a66 6
+AVLmodule.obj: AVLmodule.c $(AVL_LIB)\avl.h
+        $(cc) -DDEBUG_AVL -I$(AVL_LIB) $(cflags) $(ccustom) $(cdebug) $(cinclude) $(cpch) $(pythonopts) /DUSE_DL_IMPORT /Tp $*.c
+
+avl.$(pythondllext): $(AVL_LIB)\avl.c $(AVL_LIB)\avl.h AVLmodule.obj
+        link -dll -out:$*.$(pythondllext) AVLmodule.obj -implib:AVLmodule.lib -entry:_DllMainCRTStartup$(DLLENTRY) $(ldebug) /EXPORT:initavl $(lcustom) $(AVL_LIB)\avl.lib $(python_defs_lib)
+---------------------------------------------------------------------------
+d68 1
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@d2 1
+a2 1
+		     AVL Tree Objects for Python
+d20 4
+a23 4
+i)	Find an item having a given key
+ii)	Find the kth item, given k
+iii)	Insert an item at a specified place
+iv)	Delete a specified item
+d79 1
+a79 1
+	$(cc) -DDEBUG_AVL -I$(AVL_LIB) $(cflags) $(ccustom) $(cdebug) $(cinclude) $(cpch) $(pythonopts) /DUSE_DL_IMPORT /Tp $*.c
+d82 1
+a82 1
+	link -dll -out:$*.$(pythondllext) AVLmodule.obj -implib:AVLmodule.lib -entry:_DllMainCRTStartup$(DLLENTRY) $(ldebug) /EXPORT:initavl $(lcustom) $(AVL_LIB)\avl.lib $(python_defs_lib)
+@

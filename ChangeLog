@@ -1,0 +1,278 @@
+2005-09-20  Samual M. Rushing  <rushing@nightmare.com>
+
+	* AVLmodule.c: initavl():
+	  place a __version__ string into the module namespace.
+
+	* setup.py: version
+
+	* AVLmodule.c: (Berthold Höllmann)
+	Win32 compilation issue, can't take address
+	  of PyType_Type.
+
+2005-08-19  Samual M. Rushing  <rushing@nightmare.com>
+
+	* README: 2.1.2
+
+	* setup.py: update version number
+
+	* avl.c: avl_get_span_by_key():
+	avl_get_span_by_two_keys():
+	  cover an edge case when the tree only has one element,
+	    avoid get_successor() returning the false 'root' of
+	    the tree, which has key/val==NULL.
+	  [reported by Kenneth Duda, thx!]
+
+2005-06-21  Samual M. Rushing  <rushing@nightmare.com>
+
+	* AVLmodule.c: updates from Berthold Höllmann:
+	  define PyDoc_XXX macros if necessary
+	  misplaced semicolon in docstring
+
+2005-06-21  Samual M. Rushing  <rushing@nightmare.com>
+
+	* AVLmodule.c: updates from Berthold Höllmann:
+	  define PyDoc_XXX macros if necessary
+	  misplaced semicolon in docstring
+
+2005-06-01  Samual M. Rushing  <rushing@nightmare.com>
+
+	* README: fix typo
+
+	* test.c: 64-bit platforms: use <int> instead of <long>.
+
+	* test.c: api changes
+
+	* setup.py: minor change to url
+
+	* setup.py: New file.
+
+	* README: shout-outs
+
+	* AVLmodule.c, avl.c, avl.h:
+	64-bit platforms: use <int> instead of <long>.
+
+	* avl.c, avl.h: remove unused/unneeded height slot
+
+	* AVLmodule.c: add ironport copyright
+
+	* avl.c: add ironport copyright
+	avl_insert_by_key():
+	  returns index of insertion
+
+	* avl.h: add ironport copyright
+
+	* AVLmodule.c: use PyDoc_STRVAR, other cosmetic changes
+
+	* AVLmodule.c: Merging lots of changes from IronPort:
+	  revision 1.7
+	  date: 2001/09/15 01:01:29;  author: rushing;  state: Exp;  lines: +3 -3
+	  too many shared external symbols; renamed many non-static functions to
+	    be unique, e.g.
+	    get_item_by_index() =>
+	      avlpqm_get_item_by_index(),
+	      avl_get_item_by_index(),
+	      avlmap_get_item_by_index()
+	  ----------------------------
+	  revision 1.6
+	  date: 2001/06/15 04:52:30;  author: ehuss;  state: Exp;  lines: +20 -45
+	  removed a lot of extra unnecessary INCREF/DECREF's
+	  ----------------------------
+	  revision 1.5
+	  date: 2001/05/31 21:36:19;  author: martinb;  state: Exp;  lines: +42 -12
+	  Made native slicing and slice_as_tree and slice_as_list functions conform to common Python slicing behaviour.
+	  ----------------------------
+	  revision 1.4
+	  date: 2001/05/31 17:59:21;  author: rushing;  state: Exp;  lines: +6 -5
+	  #Oops, forgot this one
+	  ----------------------------
+	  revision 1.3
+	  date: 2001/05/25 00:40:08;  author: martinb;  state: Exp;  lines: +5 -9
+	  Check for negative indices (an error condition) in avl_tree_item().
+	  ----------------------------
+	  revision 1.2
+	  date: 2001/03/21 01:26:06;  author: rushing;  state: Exp;  lines: +3 -3
+	  protect macro arg *in* the macro
+
+	ehuss   == Eric Huss
+	martinb == Martin Baker (kemokid)
+	rushing == Sam Rushing
+
+	* AVLmodule.c, avl.h: avl_insert_by_key():
+	  returns index of insertion
+	  [IronPort v1.3]
+
+	* AVLmodule.c: updates from Berthold Höllmann:
+	  __cplusplus wrap.
+	  #include <Python.h> rather than "Python.h"
+	  renamed libavl functions with "avl_" prefix
+	  avl_tree_slice():
+	    if low >= high, return an empty tree.
+	  modernized the type definition
+
+	from Sam Rushing/IronPort:
+	  avl_new_avl_from_list() isn't a visible function,
+	   thus it doesn't need a doc string.
+	  made many functions static.
+
+	* avl.c:
+	in error conditions, print node keys as pointers, don't cast to int.
+
+	avl_print_node():
+	  initialize link objects piecemeal to please older/pedantic compilers.
+	  moved global balance_chars into avl_print_node() as a static local.
+
+	* avl.h: [from IronPort]
+	  revision 1.2
+	  date: 2001/03/21 01:26:26;  author: rushing;  state: Exp;  lines: +2 -2
+	  protect macro arg *in* the macro
+
+	* AVLmodule.c: untabified, removed trailing whitespace
+
+	* avl.c: place an 'avl_' prefix on all public symbols
+
+	* test.c: libavl names now have an 'avl_' prefix.
+
+	* test.c: New file.
+
+	* avl.c: untabified, removed trailing whitespace
+
+	* avl.h: add an "avl_" prefix to all global functions and macros
+
+	* avl.h: untabified, removed trailing whitespace
+
+	* huffman.py: New file.
+
+	* README: changed to reflect the move to distutils
+
+	* README: untabify
+
+	* README: New file.
+
+	* treeset.py: untabified, trailing whitespace removed.
+
+	* treeset.py, avl_tree.py, test.py: New file.
+
+2001-02-04  Samual M. Rushing  <rushing@nightmare.com>
+
+	* avl.c:
+	remove nonexistent from right: finally get it right thanks, to Paul
+	Cameron <1paul@optushome.com.au>
+
+2001-02-04  Paul Cameron <1paul@optushome.com.au>
+
+	* avl.c:
+	remove nonexistent from right: finally get it right thanks, to Paul
+	Cameron <1paul@optushome.com.au>
+
+2001-01-28  Samual M. Rushing  <rushing@nightmare.com>
+
+	* avl.c: delete non-existent key, bug in 'move right' clause
+
+1998-10-10  Samual M. Rushing  <rushing@nightmare.com>
+
+	* AVLmodule.c: matching DECREF for key when a remove fails
+
+1998-10-04  Samual M. Rushing  <rushing@gnome.nightmare.com>
+
+	* avl.c: fixed operations on empty trees
+
+1998-03-03  Samual M. Rushing  <rushing@nightmare.com>
+
+	* avl.c: Fixed bogus rank adjustment when deleting a non-existent key
+
+1997-02-21  Samual M. Rushing  <rushing@nightmare.com>
+
+	* AVLmodule.c, avl.c: copyright notice
+
+	* avl.c: get_span_by_two_keys(): handle no-match case on low_key
+
+	* avl.c: one-off bug in get_span_by_two_keys [left side]
+
+	* avl.h: reformatted the function prototypes
+
+	* avl.h, avl.c, AVLmodule.c: at_least() and at_most() from David Ascher
+
+	* AVLmodule.c, avl.c, avl.h: compare_arg works
+
+1996-02-26  Samual M. Rushing  <rushing@nightmare.com>
+
+	* AVLmodule.c, avl.c, avl.h:
+	revamp with comparison function considered part of the object
+
+1995-11-28  Samual M. Rushing  <rushing@nightmare.com>
+
+	* AVLmodule.c: implemented node caching for inorder iteration.
+
+	* AVLmodule.c: new method: span()
+
+	* avl.h: new prototypes:
+	  get_span_by_key()
+	  get_span_by_two_keys()
+
+	* avl.c: new functions:
+	  get_index_by_key()
+	  get_span_by_key()
+	  get_span_by_two_keys()
+
+Tue Nov 28 20:54:36 1995  Samual M Rushing  <rushing@squirl.nightmare.com>
+
+	* AVLmodule.c: implemented node caching for inorder iteration.
+
+	* AVLmodule.c: new method: span()
+
+	* avl.h: new prototypes:
+	  get_span_by_key()
+	  get_span_by_two_keys()
+
+	* avl.c: new functions:
+	  get_index_by_key()
+	  get_span_by_key()
+	  get_span_by_two_keys()
+
+Thu Nov 23 02:24:55 1995  Samual M Rushing  <rushing@squirl.nightmare.com>
+
+	* AVLmodule.c: removed the from_list function
+
+	* AVLmodule.c:
+	avl_tree_concat(): return self_copy directly if bb is empty.
+
+	* AVLmodule.c: added slice_as_list()
+	added slice_as_tree()
+	__getslice__ returns a new tree
+	avl.newavl() accepts optional list or tree
+
+Wed Nov 22 01:26:56 1995  Samual M Rushing  <rushing@squirl.nightmare.com>
+
+	* AVLmodule.c: moved an INCREF in avl_tree_insert()
+	new implementation of __repr__ that doesn't
+	  create a list object. (uses get_successor)
+	deleted the inorder_list() functions.
+
+	* avl.c: free each node structure in free_avl_tree_helper()
+
+Tue Nov 21 23:46:44 1995  Samual M Rushing  <rushing@squirl.nightmare.com>
+
+	* avl.c: added get_successor()
+
+	* avl.h: added get_predecessor and get_successor prototypes.
+
+Thu Nov 16 22:47:20 1995  Samual M Rushing  <rushing@squirl.nightmare.com>
+
+	* AVLmodule.c: documentation strings
+	added has_key()
+
+	* avl.h: signed/unsigned glitches caught by the MS C compiler.
+
+	* AVLmodule.c: added 'from_list'
+	various glitches caught by the MS compiler
+
+	* avl.c: signed/unsigned mismatch patch
+
+	* avl.h: 'publish' new_avl_node() prototype
+
+Wed Nov 15 20:53:37 1995  Samual M Rushing  <rushing@squirl.nightmare.com>
+
+	* avl.c: free root->right only when necessary
+
+	* AVLmodule.c, avl.h, avl.c: Initial revision
+

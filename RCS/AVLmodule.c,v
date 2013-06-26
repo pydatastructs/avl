@@ -1,0 +1,2797 @@
+head	2.14;
+access;
+symbols;
+locks; strict;
+comment	@ * @;
+
+
+2.14
+date	2005.09.20.19.31.24;	author rushing;	state Exp;
+branches;
+next	2.13;
+
+2.13
+date	2005.09.20.19.25.17;	author rushing;	state Exp;
+branches;
+next	2.12;
+
+2.12
+date	2005.06.21.18.29.48;	author rushing;	state Exp;
+branches;
+next	2.11;
+
+2.11
+date	2005.06.02.01.06.44;	author rushing;	state Exp;
+branches;
+next	2.10;
+
+2.10
+date	2005.06.02.00.54.34;	author rushing;	state Exp;
+branches;
+next	2.9;
+
+2.9
+date	2005.06.02.00.52.10;	author rushing;	state Exp;
+branches;
+next	2.8;
+
+2.8
+date	2005.06.02.00.46.20;	author rushing;	state Exp;
+branches;
+next	2.7;
+
+2.7
+date	2005.06.02.00.22.33;	author rushing;	state Exp;
+branches;
+next	2.6;
+
+2.6
+date	2005.06.02.00.10.29;	author rushing;	state Exp;
+branches;
+next	2.5;
+
+2.5
+date	2005.06.01.23.07.59;	author rushing;	state Exp;
+branches;
+next	2.4;
+
+2.4
+date	98.10.10.16.16.06;	author rushing;	state Exp;
+branches;
+next	2.3;
+
+2.3
+date	97.02.22.00.11.53;	author rushing;	state Exp;
+branches;
+next	2.2;
+
+2.2
+date	97.02.21.23.22.57;	author rushing;	state Exp;
+branches;
+next	2.1;
+
+2.1
+date	97.02.21.23.10.13;	author rushing;	state Exp;
+branches;
+next	2.0;
+
+2.0
+date	96.02.26.06.18.13;	author rushing;	state Exp;
+branches;
+next	1.10;
+
+1.10
+date	95.11.28.20.54.36;	author rushing;	state Exp;
+branches;
+next	1.9;
+
+1.9
+date	95.11.28.20.34.54;	author rushing;	state Exp;
+branches;
+next	1.8;
+
+1.8
+date	95.11.23.02.24.55;	author rushing;	state Exp;
+branches;
+next	1.7;
+
+1.7
+date	95.11.23.02.15.21;	author rushing;	state Exp;
+branches;
+next	1.6;
+
+1.6
+date	95.11.23.02.13.08;	author rushing;	state Exp;
+branches;
+next	1.5;
+
+1.5
+date	95.11.23.02.08.07;	author rushing;	state Exp;
+branches;
+next	1.4;
+
+1.4
+date	95.11.22.01.26.56;	author rushing;	state Exp;
+branches;
+next	1.3;
+
+1.3
+date	95.11.16.22.47.20;	author rushing;	state Exp;
+branches;
+next	1.2;
+
+1.2
+date	95.11.16.10.02.30;	author rushing;	state Exp;
+branches;
+next	1.1;
+
+1.1
+date	95.11.15.20.41.43;	author rushing;	state Exp;
+branches;
+next	;
+
+
+desc
+@@
+
+
+2.14
+log
+@initavl():
+  place a __version__ string into the module namespace.
+@
+text
+@/* -*- Mode: C; indent-tabs-mode: nil -*- */
+
+/*
+ * Copyright (C) 1995-1997 by Sam Rushing <rushing@@nightmare.com>
+ * Copyright (C) 2005 by Germanischer Lloyd AG
+ * Copyright (C) 2001-2005 by IronPort Systems, Inc.
+ *
+ *                         All Rights Reserved
+ *
+ * Permission to use, copy, modify, and distribute this software and
+ * its documentation for any purpose and without fee is hereby
+ * granted, provided that the above copyright notice appear in all
+ * copies and that both that copyright notice and this permission
+ * notice appear in supporting documentation, and that the name of Sam
+ * Rushing not be used in advertising or publicity pertaining to
+ * distribution of the software without specific, written prior
+ * permission.
+ *
+ * SAM RUSHING DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
+ * INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN
+ * NO EVENT SHALL SAM RUSHING BE LIABLE FOR ANY SPECIAL, INDIRECT OR
+ * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
+ * OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+ * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ *
+ */
+
+/* $Id: AVLmodule.c,v 2.13 2005/09/20 19:25:17 rushing Exp rushing $ */
+
+#include <Python.h>
+#include "avl.h"
+
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
+static PyObject *ErrorObject;
+
+#ifndef PyDoc_STR
+#define PyDoc_VAR(name)         static char name[]
+#define PyDoc_STR(str)          (str)
+#define PyDoc_STRVAR(name, str) PyDoc_VAR(name) = PyDoc_STR(str)
+#endif
+
+/* ----------------------------------------------------- */
+
+/* Declarations for objects of type AVL tree */
+
+/* We use an 'index cache'.  Whenever a lookup is done by index, we
+ * cache the resultant node, so that if the next lookup is simply
+ * <i+1>, we just get_successor() to find it.  Of course, invalidate
+ * this node cache whenever there's been an insertion or deletion.
+ *
+ * This seems to speed up iterating over a large tree in an indirect
+ * manner: If I create a tree of 100,000 nodes, the first few
+ * iterations seem to take longer.  I think this is because the entire
+ * tree needs to be paged into memory in order to access each element
+ * individually.  The node cache is friendlier, in that only a small
+ * number of nodes need be found in order to get the inorder
+ * successor.
+ */
+
+typedef struct {
+        PyObject_HEAD
+        avl_tree        * tree;
+        avl_node        * node_cache;
+        int             cache_index;
+        PyObject *      compare_function;
+} avl_treeobject;
+
+staticforward PyTypeObject Avl_treetype;
+
+#define is_avl_tree_object(v)   ((v)->ob_type == &Avl_treetype)
+
+/* forward declarations */
+static avl_treeobject * newavl_treeobject(PyObject * compare_function);
+static PyObject * avl_tree_slice (avl_treeobject *self, int ilow, int ihigh);
+static avl_treeobject * avl_copy_avl_tree (avl_treeobject * source);
+
+/* ---------------------------------------------------------------- */
+
+static
+int
+avl_key_compare_for_python (void * compare_arg, void * a, void * b)
+{
+  avl_treeobject * self = (avl_treeobject *) compare_arg;
+
+  if (!self->compare_function) {
+    return PyObject_Compare ((PyObject *) a, (PyObject *) b);
+  } else {
+    PyObject * arglist, * py_result;
+
+    arglist = Py_BuildValue ("(OO)", (PyObject *) a, (PyObject *) b);
+    if (!arglist) {
+      return 0;
+    }
+    py_result = PyEval_CallObject (self->compare_function, arglist);
+    Py_DECREF (arglist);
+    if (!py_result) {
+      return 0;
+    }
+    if (!PyInt_Check (py_result)) {
+      PyErr_SetString (PyExc_TypeError, "comparison function should return an int");
+      return 0;
+    } else {
+      return PyInt_AsLong (py_result);
+    }
+  }
+}
+
+PyDoc_STRVAR (
+  avl_tree_insert__doc__,
+  "Insert an item into the tree"
+  );
+
+static PyObject *
+avl_tree_insert(avl_treeobject * self, PyObject * args)
+{
+  PyObject * val;
+
+  if (!PyArg_ParseTuple(args, "O", &val)) {
+    return NULL;
+  } else {
+    unsigned int index = 0;
+    Py_INCREF (val);
+    if (avl_insert_by_key (self->tree, (void *) val, &index) != 0) {
+      Py_DECREF (val);
+      PyErr_SetString (ErrorObject, "error while inserting item");
+      return NULL;
+    } else {
+      self->node_cache = NULL;
+      return PyInt_FromLong (index);
+    }
+  }
+}
+
+PyDoc_STRVAR (
+  avl_tree_remove__doc__,
+  "Remove an item from the tree"
+  );
+
+/* remove_by_key's free_key_fun callback */
+
+static
+int
+avl_tree_key_free_fun (void * key)
+{
+  Py_DECREF ((PyObject *) key);
+  return 0;
+}
+
+static PyObject *
+avl_tree_remove (avl_treeobject *self, PyObject *args)
+{
+  PyObject * val;
+
+  if (!PyArg_ParseTuple(args, "O", &val)) {
+    return NULL;
+  } else {
+    if (avl_remove_by_key (self->tree, (void *) val, avl_tree_key_free_fun) != 0) {
+      PyErr_SetString (ErrorObject, "error while removing item");
+      return NULL;
+    } else {
+      self->node_cache = NULL;
+      Py_INCREF(Py_None);
+      return Py_None;
+    }
+  }
+}
+
+PyDoc_STRVAR (
+  avl_tree_lookup__doc__,
+  "Return the first object comparing equal to the <key> argument"
+  );
+
+static PyObject *
+avl_tree_lookup (avl_treeobject * self, PyObject * args)
+{
+  PyObject * key_val;
+  PyObject * return_value;
+  int result;
+
+  if (!PyArg_ParseTuple (args, "O", &key_val)) {
+    return NULL;
+  } else {
+    if (self->tree->length) {
+      result = avl_get_item_by_key (self->tree, (void *) key_val, (void **) &return_value);
+      if (result == 0) {
+	/* success */
+	Py_INCREF (return_value);
+	return (return_value);
+      } else {
+	PyErr_SetObject (PyExc_KeyError, key_val);
+	return NULL;
+      }
+    } else {
+      PyErr_SetObject (PyExc_KeyError, key_val);
+      return NULL;
+    }
+  }
+}
+
+PyDoc_STRVAR (
+  avl_tree_span__doc__,
+  "t.span (key) => (low, high)\n"
+  "Returns a pair of indices (low, high) that span the range of <key>"
+  );
+
+static PyObject *
+avl_tree_span (avl_treeobject * self, PyObject * args)
+{
+  PyObject * low_key, * high_key = NULL;
+  unsigned int low, high;
+  int result;
+
+  if (!PyArg_ParseTuple (args, "O|O", &low_key, &high_key)) {
+    return NULL;
+  } else {
+    if (self->tree->length) {
+      /* only one key was specified */
+      if (!high_key) {
+	result = avl_get_span_by_key (self->tree,
+                                      (void *) low_key,
+                                      &low,
+                                      &high);
+	if (result == 0) {
+	  /* success */
+	  return Py_BuildValue ("(ii)", (int) low, (int) high);
+	} else {
+	  PyErr_SetString (ErrorObject, "error while locating key span");
+	  return NULL;
+	}
+      } else {
+	/* they specified two keys */
+	result = avl_get_span_by_two_keys (self->tree,
+                                           (void *) low_key,
+                                           (void *) high_key,
+                                           &low,
+                                           &high);
+	if (result == 0) {
+	  /* success */
+	  return Py_BuildValue ("(ii)", (int) low, (int) high);
+	} else {
+	  PyErr_SetString (ErrorObject, "error while locating key span");
+	  return NULL;
+	}
+      }
+    } else {
+      return Py_BuildValue ("(ii)", 0, 0);
+    }
+  }
+}
+
+PyDoc_STRVAR (
+  avl_tree_at_least__doc__,
+  "Return the first object comparing greater to or equal to the <key> argument"
+  );
+
+static PyObject *
+avl_tree_at_least (avl_treeobject * self, PyObject * args)
+{
+  PyObject * key_val;
+  PyObject * return_value;
+  int result;
+
+  if (!PyArg_ParseTuple (args, "O", &key_val)) {
+    return NULL;
+  } else {
+    if (self->tree->length) {
+      result = avl_get_item_by_key_least (self->tree,
+                                          (void *) key_val,
+                                          (void **) &return_value);
+      if (result == 0) {
+	/* success */
+	Py_INCREF (return_value);
+	return (return_value);
+      } else {
+	PyErr_SetObject (PyExc_KeyError, key_val);
+	return NULL;
+      }
+    } else {
+      PyErr_SetObject (PyExc_KeyError, key_val);
+      return NULL;
+    }
+  }
+}
+
+PyDoc_STRVAR (
+  avl_tree_at_most__doc__,
+  "Return the first object comparing less than or equal to the <key> argument"
+  );
+  
+
+static PyObject *
+avl_tree_at_most (avl_treeobject * self, PyObject * args)
+{
+  PyObject * key_val;
+  PyObject * return_value;
+  int result;
+
+  if (!PyArg_ParseTuple (args, "O", &key_val)) {
+    return NULL;
+  } else {
+    if (self->tree->length) {
+      result = avl_get_item_by_key_most (self->tree,
+                                         (void *) key_val,
+                                         (void **) &return_value);
+      if (result == 0) {
+	/* success */
+	Py_INCREF (return_value);
+	return (return_value);
+      } else {
+	PyErr_SetObject (PyExc_KeyError, key_val);
+	return NULL;
+      }
+    } else {
+      PyErr_SetObject (PyExc_KeyError, key_val);
+      return NULL;
+    }
+  }
+}
+
+PyDoc_STRVAR (
+  avl_tree_has_key__doc__,
+  "Does the tree contain an item comparing equal to <key>?"
+  );
+
+static PyObject *
+avl_tree_has_key (avl_treeobject * self, PyObject * args)
+{
+  PyObject * key_val;
+  PyObject * return_value;
+  int result;
+
+  if (!PyArg_ParseTuple (args, "O", &key_val)) {
+    return NULL;
+  } else {
+    if (self->tree->length) {
+      result = avl_get_item_by_key (self->tree,
+                                    (void *) key_val,
+                                    (void **) &return_value);
+      if (result == 0) {
+	/* success */
+	return (Py_BuildValue ("i", 1));
+      } else {
+	return Py_BuildValue ("i", 0);
+      }
+    } else {
+      return (Py_BuildValue ("i", 0));
+    }
+  }
+}
+
+#ifdef DEBUG_AVL
+PyDoc_STRVAR (
+  avl_tree_verify__doc__,
+  "Verify the internal structure of the AVL tree (testing only)"
+  );
+
+static PyObject *
+avl_tree_verify (avl_treeobject * self, PyObject * args)
+{
+  return (Py_BuildValue ("i", verify (self->tree)));
+}
+
+PyDoc_STRVAR (
+  avl_tree_print_internal_structure__doc__,
+  "Print the internal structure of the AVL tree (testing only)"
+  );
+
+static
+int
+avl_tree_key_printer (char * buffer, void * key)
+{
+  PyObject * repr_string;
+  int length;
+
+  repr_string = (PyObject *) PyObject_Repr ((PyObject *) key);
+  if (repr_string) {
+    strcpy (buffer, PyString_AsString (repr_string));
+    length = PyString_Size (repr_string);
+    Py_DECREF (repr_string);
+    return length;
+  } else {
+    strcpy (buffer, "<couldn't print node>");
+    return 21;
+  }
+}
+
+static PyObject *
+avl_tree_print_internal_structure (avl_treeobject * self, PyObject * args)
+{
+  print_tree (self->tree, avl_tree_key_printer);
+  Py_INCREF (Py_None);
+  return Py_None;
+}
+
+#endif
+
+
+/*
+ * This is an inorder tree-building: with careful synchronization
+ * of the divide-and-conquer recursion and the source tree iteration
+ * we can ask for the next key at the exact moment when we need it.
+ * neat, huh!?
+ * since we know that get_successor() is O(2) (see comments in avl_tree.py)
+ * this algorithm is O(slice_size).
+ */
+
+/*
+ * Todo: pull the (low == high) test up one level, this will
+ * remove half the function calls.
+ */
+
+static
+int
+tree_from_tree (avl_node ** node,
+                avl_node * parent,
+                avl_node ** address,
+                unsigned int low,
+                unsigned int high)
+{
+  unsigned int midway = ((high - low) / 2) + low;
+  if (low == high) {
+    *address = NULL;
+    return 1;
+  } else {
+    PyObject * item;
+    avl_node * new_node;
+    int left_height, right_height;
+
+    new_node = avl_new_avl_node ((void *) 0, parent);
+    if (!new_node) {
+      return -1;
+    }
+    *address = new_node;
+    AVL_SET_RANK (new_node, (midway-low)+1);
+    left_height = tree_from_tree (node, new_node, &(new_node->left), low, midway);
+    if (left_height < 0) {
+      return -1;
+    }
+
+    item = (PyObject *) (*node)->key;
+    Py_INCREF (item);
+    new_node->key = (void *) item;
+    *node = avl_get_successor (*node);
+
+    right_height = tree_from_tree (node, new_node, &(new_node->right), midway+1, high);
+    if (right_height  < 0) {
+      return -1;
+    }
+    if (left_height > right_height) {
+      AVL_SET_BALANCE (new_node, -1);
+      return left_height + 1;
+    } else if (right_height > left_height) {
+      AVL_SET_BALANCE (new_node, +1);
+      return right_height + 1;
+    } else {
+      AVL_SET_BALANCE (new_node, 0);
+      return left_height + 1;
+    }
+  }
+}
+
+static char avl_tree_from_tree__doc__[] = "return a slice of the tree as a new tree";
+
+static PyObject *
+avl_tree_from_tree (avl_treeobject * self,
+                    PyObject * args)
+{
+  int low=0;
+  int high=self->tree->length;
+
+  if (!PyArg_ParseTuple (args, "|ii", &low, &high)) {
+    return NULL;
+  }
+
+  /* match Python slicing ops: */
+  if (low < 0) low += self->tree->length;
+  if (high < 0) high += self->tree->length;
+
+  return avl_tree_slice (self, low, high);
+}
+
+static
+int
+slice_callback (unsigned int index, void * key, void * arg)
+{
+  /* arg is a list template */
+  Py_INCREF ((PyObject *) key);
+  return (PyList_SetItem ((PyObject *)arg, (int) index, (PyObject *) key));
+}
+
+static char avl_tree_slice_as_list__doc__[] = "return a slice of the tree as a list";
+
+static PyObject *
+avl_tree_slice_as_list (avl_treeobject * self, PyObject * args)
+{
+  PyObject * list;
+  int ilow = 0;
+  int ihigh = (int)self->tree->length;
+  int result;
+
+  if (!PyArg_ParseTuple (args, "|ii", &ilow, &ihigh)) {
+    return NULL;
+  }
+
+  /* match Python slicing ops: */
+  if (ilow < 0) ilow += self->tree->length;
+  if (ihigh < 0) ihigh += self->tree->length;
+
+
+  /* We are attempting to match Python slicing on list objects,
+   * which is incredibly lenient. Basically, it is impossible to
+   * get an exception.
+   */
+
+  if (ilow < 0) ilow = 0;
+  if (ihigh < 0) ihigh = 0;
+  if ((unsigned int)ihigh > self->tree->length) {
+    ihigh = (int)self->tree->length;
+  }
+  if (ilow > ihigh) {
+    ilow = ihigh;
+  }
+
+  if (!(list = PyList_New (ihigh - ilow))) {
+    return NULL;
+  }
+  if (ihigh - ilow) {
+    result = avl_iterate_index_range (self->tree,
+                                      slice_callback,
+                                      (unsigned int) ilow,
+                                      (unsigned int) ihigh,
+                                      (void *) list);
+    if (result != 0) {
+      PyErr_SetString (ErrorObject, "error while accessing slice");
+      return NULL;
+    }
+  }
+  return list;
+}
+
+static struct PyMethodDef avl_tree_methods[] = {
+  {"insert",    (PyCFunction)avl_tree_insert,           1,      avl_tree_insert__doc__},
+  {"remove",    (PyCFunction)avl_tree_remove,   1,      avl_tree_remove__doc__},
+  {"lookup",    (PyCFunction)avl_tree_lookup,   1,      avl_tree_lookup__doc__},
+  {"has_key",   (PyCFunction)avl_tree_has_key,  1,      avl_tree_has_key__doc__},
+  {"slice_as_list",     (PyCFunction)avl_tree_slice_as_list,1,  avl_tree_slice_as_list__doc__},
+  {"span",      (PyCFunction)avl_tree_span,     1,      avl_tree_span__doc__},
+  {"at_least",  (PyCFunction)avl_tree_at_least, 1,      avl_tree_at_least__doc__},
+  {"at_most",   (PyCFunction)avl_tree_at_most,  1,      avl_tree_at_most__doc__},
+  {"slice_as_tree",     (PyCFunction)avl_tree_from_tree,1,      avl_tree_from_tree__doc__},
+#ifdef DEBUG_AVL
+  {"verify",    (PyCFunction)avl_tree_verify,   1,      avl_tree_verify__doc__},
+  {"print_internal_structure",  (PyCFunction)avl_tree_print_internal_structure, 1,      avl_tree_print_internal_structure__doc__},
+#endif
+  {NULL,                NULL}           /* sentinel */
+};
+
+/* ---------- */
+
+
+static avl_treeobject *
+newavl_treeobject (PyObject * compare_function)
+{
+  avl_treeobject *self;
+
+  self = PyObject_New (avl_treeobject, &Avl_treetype);
+  if (self == NULL) {
+    return NULL;
+  }
+
+  self->tree = avl_new_avl_tree (avl_key_compare_for_python, (void *) self);
+  if (!self->tree) {
+    PyObject_Del (self);
+    return NULL;
+  }
+  self->node_cache = NULL;
+  self->cache_index = 0;
+  self->compare_function = compare_function;
+  Py_XINCREF (compare_function);
+  return self;
+}
+
+static void
+avl_tree_dealloc(avl_treeobject *self)
+{
+  avl_free_avl_tree (self->tree, avl_tree_key_free_fun);
+  PyObject_Del(self);
+}
+
+static
+int
+avl_tree_print_helper (avl_node * node,
+                       int * index,
+                       FILE * fp)
+{
+  if (node->left) {
+    if (avl_tree_print_helper (node->left, index, fp) != 0) {
+      return -1;
+    }
+  }
+  if ((*index)) {
+    fprintf (fp, ", ");
+  }
+  if ((PyObject_Print ((PyObject*) node->key, fp, 0)) != 0) {
+    return -1;
+  } else {
+    (*index)++;
+  }
+  if (node->right) {
+    if (avl_tree_print_helper (node->right, index, fp) != 0) {
+      return -1;
+    }
+  }
+  return 0;
+}
+
+static
+int
+avl_tree_print(avl_treeobject *self, FILE *fp, int flags)
+{
+  if (!self->tree->length) {
+    fprintf (fp, "[]");
+  } else {
+    int index = 0;
+
+    fprintf (fp, "[");
+    if ((avl_tree_print_helper (self->tree->root->right, & index, fp)) != 0) {
+      return -1;
+    }
+    fprintf (fp, "]");
+  }
+  return 0;
+}
+
+
+static
+PyObject *
+avl_tree_getattr(avl_treeobject *self, char *name)
+{
+        /* XXXX Add your own getattr code here */
+        return Py_FindMethod(avl_tree_methods, (PyObject *)self, name);
+}
+
+static
+int
+avl_tree_setattr(avl_treeobject *self, char *name, PyObject *v)
+{
+        /* XXXX Add your own setattr code here */
+        return -1;
+}
+
+static
+PyObject *
+avl_tree_repr (avl_treeobject *self)
+{
+  PyObject * s;
+  PyObject * comma;
+  avl_node * node;
+  unsigned int i;
+
+  if (self->tree->length) {
+    s = PyString_FromString ("[");
+    comma = PyString_FromString (", ");
+    /* find leftmost node */
+    node = self->tree->root->right;
+    while (node->left) {
+      node = node->left;
+    }
+    for (i=0; i < self->tree->length; i++) {
+      if (i > 0) {
+        PyString_Concat (&s, comma);
+      }
+      PyString_ConcatAndDel (&s, PyObject_Repr ((PyObject *)node->key));
+      node = avl_get_successor (node);
+    }
+    Py_XDECREF (comma);
+    PyString_ConcatAndDel (&s, PyString_FromString ("]"));
+    return s;
+  } else {
+    return PyString_FromString ("[]");
+  }
+}
+
+/* Code to handle accessing AVL tree objects as sequence objects */
+
+static
+int
+avl_tree_length (avl_treeobject *self)
+{
+  return (int) self->tree->length;
+}
+
+/* todo: support tree+list */
+
+static
+PyObject *
+avl_tree_concat (avl_treeobject *self, avl_treeobject *bb)
+{
+  avl_treeobject * self_copy;
+  unsigned int bb_node_counter = bb->tree->length;
+
+  self_copy = avl_copy_avl_tree ((avl_treeobject *) self);
+  if (!self_copy) {
+    return NULL;
+  }
+
+  if (bb_node_counter) {
+    avl_node * bb_node;
+
+    /* find the leftmost node of bb */
+    bb_node = bb->tree->root->right;
+    while (bb_node->left) {
+      bb_node = bb_node->left;
+    }
+
+    /*
+     * iterate over the items in bb, inserting
+     * them into self_copy
+     */
+    while (bb_node_counter--) {
+      unsigned int ignore;
+      Py_INCREF ((PyObject *)bb_node->key);
+      if (avl_insert_by_key (self_copy->tree, (void *) bb_node->key, &ignore) != 0) {
+        avl_tree_dealloc (self_copy);
+        return NULL;
+      }
+      bb_node = avl_get_successor (bb_node);
+    }
+  }
+  return (PyObject *) self_copy;
+}
+
+static
+PyObject *
+avl_tree_repeat(avl_treeobject * self, int n)
+{
+  PyErr_SetString (PyExc_TypeError,"repeat operation undefined");
+  return NULL;
+}
+
+static
+PyObject *
+avl_tree_item (avl_treeobject *self, int i)
+{
+  void * value;
+  unsigned int index = (unsigned int) i;
+  
+  /* Python takes care of negative indices for us, so if
+   * i is negative, that is an error. */
+
+  /* range-check the index */
+  if (index >= self->tree->length || i < 0) {
+    PyErr_SetString (PyExc_IndexError, "tree index out of range");
+    return NULL;
+  } else {
+    /* get the python object, and store in <value> */
+
+    /* index cache */
+    if (self->node_cache && (index == (self->cache_index + 1))) {
+      self->node_cache = avl_get_successor (self->node_cache);
+      self->cache_index++;
+      value = self->node_cache->key;
+    }
+    if (avl_get_item_by_index (self->tree, index, &value) != 0) {
+      PyErr_SetString (ErrorObject, "error while accessing item");
+      return NULL;
+    } else {
+      Py_INCREF ((PyObject *)value);
+      return (PyObject *)value;
+    }
+  }
+}
+
+static
+PyObject *
+avl_tree_slice (avl_treeobject *self, int ilow, int ihigh)
+{
+  avl_treeobject * new_tree;
+  unsigned int m;
+  avl_node * node;
+
+  /* We are attempting to match Python slicing on list objects,
+   * which is incredibly lenient. Basically, it is impossible to
+   * get an exception.
+   */
+
+  /* By the time we are called, the Python internals have
+   * already added the length of self to ilow and ihigh if they are
+   * negative. However, the values can still be negative or too large.
+   */
+  if (ilow < 0) ilow = 0;
+  if (ihigh < 0) ihigh = 0;
+  if ((unsigned int)ihigh > self->tree->length) {
+    ihigh = (int)self->tree->length;
+  }
+
+  new_tree = newavl_treeobject (self->compare_function);
+  if (!new_tree) {
+    return NULL;
+  }
+
+  /* return empty tree in this degenerate case: */
+  if (ihigh <= ilow) {
+    return (PyObject *)new_tree;
+ }
+
+  /* locate node <ilow> */
+  node = self->tree->root->right;
+  m = (unsigned int) ilow + 1;
+  while (1) {
+    if (m < AVL_GET_RANK(node)) {
+      node = node->left;
+    } else if (m > AVL_GET_RANK(node)) {
+      m = m - AVL_GET_RANK(node);
+      node = node->right;
+    } else {
+      break;
+    }
+  }
+
+  if (tree_from_tree (&node,
+                      new_tree->tree->root,
+                      &(new_tree->tree->root->right),
+                      0,
+                      ihigh - ilow) < 0) {
+    PyErr_SetString (ErrorObject, "something went amiss whilst building the tree!");
+    return NULL;
+  }
+  new_tree->tree->length = ihigh - ilow;
+  return (PyObject *) new_tree;
+}
+
+static PySequenceMethods avl_tree_as_sequence = {
+        (inquiry)avl_tree_length,               /*sq_length*/
+        (binaryfunc)avl_tree_concat,            /*sq_concat*/
+        (intargfunc)avl_tree_repeat,            /*sq_repeat*/
+        (intargfunc)avl_tree_item,              /*sq_item*/
+        (intintargfunc)avl_tree_slice,          /*sq_slice*/
+        (intobjargproc)0,                       /*sq_ass_item*/
+        (intintobjargproc)0,                    /*sq_ass_slice*/
+};
+
+/* -------------------------------------------------------------- */
+
+PyDoc_STRVAR (
+  Avl_treetype__doc__,
+  "A dual-personality object, can act like a sequence and a dictionary.  Implemented with an AVL tree"
+  );
+
+static PyTypeObject Avl_treetype = {
+        PyObject_HEAD_INIT (NULL)
+        0,                              /*ob_size*/
+        "avl.tree",                     /*tp_name*/
+        sizeof(avl_treeobject),         /*tp_basicsize*/
+        0,                              /*tp_itemsize*/
+        /* methods */
+        (destructor)avl_tree_dealloc,   /*tp_dealloc*/
+        (printfunc)avl_tree_print,      /*tp_print*/
+        (getattrfunc)avl_tree_getattr,  /*tp_getattr*/
+        (setattrfunc)avl_tree_setattr,  /*tp_setattr*/
+        (cmpfunc)0,                     /*tp_compare*/
+        (reprfunc)avl_tree_repr,        /*tp_repr*/
+        0,                              /*tp_as_number*/
+        &avl_tree_as_sequence,          /*tp_as_sequence*/
+        0,                      /*tp_as_mapping*/
+        (hashfunc)0,            /*tp_hash*/
+        (ternaryfunc)0,         /*tp_call*/
+        (reprfunc)0,            /*tp_str*/
+
+        0,                         /*tp_getattro*/
+        0,                         /*tp_setattro*/
+        0,                         /*tp_as_buffer*/
+        Py_TPFLAGS_DEFAULT,        /*tp_flags*/
+        Avl_treetype__doc__ /* Documentation string */
+};
+
+/* End of code for AVL tree objects */
+/* -------------------------------------------------------- */
+
+static
+int
+avl_copy_avl_node (avl_node * source_node,
+                   avl_node * dest_parent,
+                   avl_node ** dest_node)
+{
+  avl_node * new_node = avl_new_avl_node(source_node->key, dest_parent);
+
+  if (!new_node) {
+    return -1;
+  } else {
+    Py_INCREF ((PyObject *) new_node->key);
+    new_node->rank_and_balance = source_node->rank_and_balance;
+    if (source_node->left) {
+      if (avl_copy_avl_node (source_node->left,
+                             new_node,
+                             &(new_node->left)) != 0) {
+        return -1;
+      }
+    } else {
+      new_node->left = NULL;
+    }
+    if (source_node->right) {
+      if (avl_copy_avl_node (source_node->right,
+                             new_node,
+                             &(new_node->right)) != 0) {
+        return -1;
+      }
+    } else {
+      new_node->right = NULL;
+    }
+    *dest_node = new_node;
+    return 0;
+  }
+}
+
+static
+avl_treeobject *
+avl_copy_avl_tree (avl_treeobject * source)
+{
+  avl_treeobject * dest;
+
+  if (!(dest = newavl_treeobject (source->compare_function))) {
+    return NULL;
+  } else if (source->tree->length) {
+    if (avl_copy_avl_node (source->tree->root->right,
+                           dest->tree->root,
+                           &(dest->tree->root->right)) != 0) {
+      avl_tree_dealloc(dest);
+      return NULL;
+    } else {
+      dest->tree->length = source->tree->length;
+      return dest;
+    }
+  } else {
+    return dest;
+  }
+}
+
+/*
+ * not so cleanly separated from the avl 'library',
+ * since it builds the tree directly.
+ */
+
+/*
+ * Todo: pull the (low == high) test up one level, this will
+ * remove half the function calls.
+ */
+
+static
+int
+tree_from_list (PyObject * list,
+                avl_node * parent,
+                avl_node ** address,
+                unsigned int low,
+                unsigned int high)
+{
+  unsigned int midway = ((high - low) / 2) + low;
+  if (low == high) {
+    *address = NULL;
+    return 1;
+  } else {
+    PyObject * item = PyList_GetItem (list, midway);
+    avl_node * new_node;
+    int left_height, right_height;
+
+    new_node = avl_new_avl_node ((void *) item, parent);
+    if (!new_node) {
+      return -1;
+    }
+    *address = new_node;
+    Py_INCREF (item);
+    AVL_SET_RANK (new_node, (midway-low)+1);
+    left_height = tree_from_list (list, new_node, &(new_node->left), low, midway);
+    if (left_height < 0) {
+      return -1;
+    }
+    right_height = tree_from_list (list, new_node, &(new_node->right), midway+1, high);
+    if (right_height  < 0) {
+      return -1;
+    }
+    if (left_height > right_height) {
+      AVL_SET_BALANCE (new_node, -1);
+      return left_height + 1;
+    } else if (right_height > left_height) {
+      AVL_SET_BALANCE (new_node, +1);
+      return right_height + 1;
+    } else {
+      AVL_SET_BALANCE (new_node, 0);
+      return left_height + 1;
+    }
+  }
+}
+
+/* construct a new avl tree from a list (sorts the list as a side-effect!) */
+
+static
+PyObject *
+avl_new_avl_from_list (PyObject * self, /* not used */
+                       PyObject * args)
+{
+  PyObject * list;
+  PyObject * compare_function = NULL;
+  avl_treeobject * tree;
+  unsigned int length;
+
+  if (!PyArg_ParseTuple (args, "O!|O", &PyList_Type, &list, &compare_function)) {
+    return NULL;
+  }
+  /* sort the list */
+  if (PyList_Sort (list) != 0) {
+    return NULL;
+  }
+
+  tree = newavl_treeobject (compare_function);
+  if (!tree) {
+    return NULL;
+  }
+  length = PyList_Size(list);
+  if (tree_from_list (list,
+                      tree->tree->root,
+                      &(tree->tree->root->right),
+                      0,
+                      length) < 0) {
+    PyErr_SetString (ErrorObject, "something went amiss whilst building the tree!");
+    return NULL;
+  }
+  tree->tree->length = length;
+  return (PyObject *) tree;
+}
+
+PyDoc_STRVAR (
+  avl_newavl__doc__,
+  "With no arguments, returns a new and empty tree.\n"
+  "Given a list, it will return a new tree containing the elements\n"
+  "  of the list, and will sort the list as a side-effect\n"
+  "Given a tree, will return a copy of the original tree\n"
+  "An optional second argument is a key-comparison function\n"
+  );
+  
+static
+PyObject *
+avl_newavl(PyObject * self,     /* Not used */
+           PyObject * args)
+{
+  PyObject * arg = NULL;
+  PyObject * compare_function = NULL;
+
+  if (!PyArg_ParseTuple(args, "|OO", &arg, &compare_function)) {
+    return NULL;
+  }
+  if (!arg || arg == Py_None) {
+    return (PyObject *) newavl_treeobject (compare_function);
+  } else if (PyList_Check(arg)) {
+    return avl_new_avl_from_list ((PyObject *) NULL, args);
+  } else if (is_avl_tree_object (arg)) {
+    return (PyObject *) avl_copy_avl_tree ((avl_treeobject *) arg);
+  } else {
+    PyErr_SetString (ErrorObject, "newavl() expects a list, a tree, or no arguments");
+    return NULL;
+  }
+}
+
+/* List of methods defined in the module */
+
+static struct PyMethodDef avl_methods[] = {
+        {"newavl",      avl_newavl,     1,      avl_newavl__doc__},
+        {NULL,          NULL}           /* sentinel */
+};
+
+/* Initialization function for the module (*must* be called initavl) */
+
+PyDoc_STRVAR (
+  avl_module_documentation,
+  "Implements a dual-personality object (that can act like a sequence _and_ a dictionary) with AVL trees."
+  );
+
+void
+initavl(void)
+{
+  PyObject *m, *d, *v;
+
+  /* Create the module and add the functions */
+  m = Py_InitModule4 (
+    "avl",
+    avl_methods,
+    avl_module_documentation,
+    (PyObject*)NULL,
+    PYTHON_API_VERSION
+    );
+
+  /* Add some symbolic constants to the module */
+  d = PyModule_GetDict(m);
+  ErrorObject = PyString_FromString("avl.error");
+  PyDict_SetItemString(d, "error", ErrorObject);
+
+  v = PyString_FromString ("2.1.3");
+  PyDict_SetItemString(d, "__version__", v);
+  Py_XDECREF(v);
+
+  if (PyType_Ready(&Avl_treetype) < 0) {
+    return;
+  }
+  
+  /* Check for errors */
+  if (PyErr_Occurred()) {
+    Py_FatalError("can't initialize module avl");
+  }
+}
+
+#ifdef  __cplusplus
+}
+#endif
+@
+
+
+2.13
+log
+@(Berthold Höllmann)
+Win32 compilation issue, can't take address
+  of PyType_Type.
+@
+text
+@d29 1
+a29 1
+/* $Id: AVLmodule.c,v 2.12 2005/06/21 18:29:48 rushing Exp rushing $ */
+d1084 1
+a1084 1
+  PyObject *m, *d;
+d1099 4
+@
+
+
+2.12
+log
+@updates from Berthold Höllmann:
+  define PyDoc_XXX macros if necessary
+  misplaced semicolon in docstring
+@
+text
+@d29 1
+a29 1
+/* $Id: AVLmodule.c,v 2.11 2005/06/02 01:06:44 rushing Exp rushing $ */
+d855 1
+a855 1
+        PyObject_HEAD_INIT(&PyType_Type)
+@
+
+
+2.11
+log
+@64-bit platforms: use <int> instead of <long>.
+@
+text
+@d29 1
+a29 1
+/* $Id: AVLmodule.c,v 2.10 2005/06/02 00:54:34 rushing Exp rushing $ */
+d40 6
+d174 2
+a175 2
+  "Return the first object comparing equal to the <key> argument";
+  )
+@
+
+
+2.10
+log
+@add ironport copyright
+@
+text
+@d29 1
+a29 1
+/* $Id: AVLmodule.c,v 2.9 2005/06/02 00:52:10 rushing Exp rushing $ */
+d208 1
+a208 1
+  unsigned long low, high;
+d482 1
+a482 1
+slice_callback (unsigned long index, void * key, void * arg)
+d515 1
+a515 1
+  if ((unsigned long)ihigh > self->tree->length) {
+d528 2
+a529 2
+                                      (unsigned long) ilow,
+                                      (unsigned long) ihigh,
+d591 1
+a591 1
+                       long * index,
+d622 1
+a622 1
+    long index = 0;
+d657 1
+a657 1
+  unsigned long i;
+d698 1
+a698 1
+  unsigned long bb_node_counter = bb->tree->length;
+d744 1
+a744 1
+  unsigned long index = (unsigned long) i;
+d777 1
+a777 1
+  unsigned long m;
+d791 1
+a791 1
+  if ((unsigned long)ihigh > self->tree->length) {
+d807 1
+a807 1
+  m = (unsigned long) ilow + 1;
+@
+
+
+2.9
+log
+@use PyDoc_STRVAR, other cosmetic changes
+@
+text
+@d6 1
+d29 1
+a29 1
+/* $Id: AVLmodule.c,v 2.8 2005/06/02 00:46:20 rushing Exp rushing $ */
+@
+
+
+2.8
+log
+@Merging lots of changes from IronPort:
+  revision 1.7
+  date: 2001/09/15 01:01:29;  author: rushing;  state: Exp;  lines: +3 -3
+  too many shared external symbols; renamed many non-static functions to
+    be unique, e.g.
+    get_item_by_index() =>
+      avlpqm_get_item_by_index(),
+      avl_get_item_by_index(),
+      avlmap_get_item_by_index()
+  ----------------------------
+  revision 1.6
+  date: 2001/06/15 04:52:30;  author: ehuss;  state: Exp;  lines: +20 -45
+  removed a lot of extra unnecessary INCREF/DECREF's
+  ----------------------------
+  revision 1.5
+  date: 2001/05/31 21:36:19;  author: martinb;  state: Exp;  lines: +42 -12
+  Made native slicing and slice_as_tree and slice_as_list functions conform to common Python slicing behaviour.
+  ----------------------------
+  revision 1.4
+  date: 2001/05/31 17:59:21;  author: rushing;  state: Exp;  lines: +6 -5
+  #Oops, forgot this one
+  ----------------------------
+  revision 1.3
+  date: 2001/05/25 00:40:08;  author: martinb;  state: Exp;  lines: +5 -9
+  Check for negative indices (an error condition) in avl_tree_item().
+  ----------------------------
+  revision 1.2
+  date: 2001/03/21 01:26:06;  author: rushing;  state: Exp;  lines: +3 -3
+  protect macro arg *in* the macro
+
+ehuss   == Eric Huss
+martinb == Martin Baker (kemokid)
+rushing == Sam Rushing
+@
+text
+@d28 1
+a28 1
+/* $Id: AVLmodule.c,v 2.7 2005/06/02 00:22:33 rushing Exp rushing $ */
+d105 4
+a108 4
+
+static char avl_tree_insert__doc__[] =
+"Insert an item into the tree"
+;
+d131 4
+a134 3
+static char avl_tree_remove__doc__[] =
+"Remove an item from the tree"
+;
+d165 4
+a168 2
+static char avl_tree_lookup__doc__[] =
+"Return the first object comparing equal to the <key> argument";
+d197 5
+a201 3
+static char avl_tree_span__doc__[] =
+"t.span (key) => (low, high)\n"
+"Returns a pair of indices (low, high) that span the range of <key>";
+d248 4
+a251 2
+static char avl_tree_at_least__doc__[] =
+"Return the first object comparing greater to or equal to the <key> argument";
+d282 5
+a286 2
+static char avl_tree_at_most__doc__[] =
+"Return the first object comparing less than or equal to the <key> argument";
+d317 4
+a320 2
+static char avl_tree_has_key__doc__[] =
+"Does the tree contain an item comparing equal to <key>?";
+d349 4
+a352 2
+static char avl_tree_verify__doc__[] =
+"Verify the internal structure of the AVL tree (testing only)";
+d360 4
+a363 2
+static char avl_tree_print_internal_structure__doc__[] =
+"Print the internal structure of the AVL tree (testing only)";
+d842 4
+a845 3
+static char Avl_treetype__doc__[] =
+"A dual-personality object, can act like a sequence and a dictionary.  Implemented with an AVL tree"
+;
+d1028 9
+a1036 8
+static char avl_newavl__doc__[] =
+"With no arguments, returns a new and empty tree.\n"
+"Given a list, it will return a new tree containing the elements\n"
+"  of the list, and will sort the list as a side-effect\n"
+"Given a tree, will return a copy of the original tree\n"
+"An optional second argument is a key-comparison function\n"
+;
+
+d1069 4
+a1072 3
+static char avl_module_documentation[] =
+"Implements a dual-personality object (that can act like a sequence _and_ a dictionary) with AVL trees."
+;
+d1080 7
+a1086 3
+  m = Py_InitModule4("avl", avl_methods,
+                     avl_module_documentation,
+                     (PyObject*)NULL,PYTHON_API_VERSION);
+@
+
+
+2.7
+log
+@avl_insert_by_key():
+  returns index of insertion
+  [IronPort v1.3]
+@
+text
+@d28 1
+a28 1
+/* $Id: AVLmodule.c,v 2.6 2005/06/02 00:10:29 rushing Exp rushing $ */
+a152 1
+    Py_INCREF(val);
+a153 1
+      Py_DECREF(val);
+a157 1
+      Py_DECREF (val);
+a176 1
+    Py_INCREF (key_val);
+d180 3
+a182 4
+        /* success */
+        Py_INCREF (return_value);
+        Py_DECREF (key_val);
+        return (return_value);
+d184 2
+a185 3
+        Py_DECREF (key_val);
+        PyErr_SetObject (PyExc_KeyError, key_val);
+        return NULL;
+a187 1
+      Py_DECREF (key_val);
+d211 1
+a211 2
+        Py_INCREF (low_key);
+        result = avl_get_span_by_key (self->tree,
+d215 7
+a221 8
+        Py_DECREF (low_key);
+        if (result == 0) {
+          /* success */
+          return Py_BuildValue ("(ii)", (int) low, (int) high);
+        } else {
+          PyErr_SetString (ErrorObject, "error while locating key span");
+          return NULL;
+        }
+d223 2
+a224 4
+        /* they specified two keys */
+        Py_INCREF (low_key);
+        Py_INCREF (high_key);
+        result = avl_get_span_by_two_keys (self->tree,
+d229 7
+a235 9
+        Py_DECREF (low_key);
+        Py_DECREF (high_key);
+        if (result == 0) {
+          /* success */
+          return Py_BuildValue ("(ii)", (int) low, (int) high);
+        } else {
+          PyErr_SetString (ErrorObject, "error while locating key span");
+          return NULL;
+        }
+a255 1
+    Py_INCREF (key_val);
+d261 3
+a263 4
+        /* success */
+        Py_INCREF (return_value);
+        Py_DECREF (key_val);
+        return (return_value);
+d265 2
+a266 3
+        Py_DECREF (key_val);
+        PyErr_SetObject (PyExc_KeyError, key_val);
+        return NULL;
+a268 1
+      Py_DECREF (key_val);
+a287 1
+    Py_INCREF (key_val);
+d293 3
+a295 4
+        /* success */
+        Py_INCREF (return_value);
+        Py_DECREF (key_val);
+        return (return_value);
+d297 2
+a298 3
+        Py_DECREF (key_val);
+        PyErr_SetObject (PyExc_KeyError, key_val);
+        return NULL;
+a300 1
+      Py_DECREF (key_val);
+a319 1
+    Py_INCREF (key_val);
+d325 2
+a326 3
+        /* success */
+        Py_DECREF (key_val);
+        return (Py_BuildValue ("i", 1));
+d328 1
+a328 2
+        Py_DECREF (key_val);
+        return Py_BuildValue ("i", 0);
+a330 1
+      Py_DECREF (key_val);
+d449 2
+a450 1
+  unsigned int low=0, high=self->tree->length - 1;
+d456 4
+d478 2
+a479 1
+  unsigned int ilow, ihigh;
+d486 17
+a502 3
+  if ((ilow < 0) || (ihigh > self->tree->length)) {
+    PyErr_SetString (PyExc_IndexError, "tree index out of range");
+    return NULL;
+d727 4
+a730 8
+  unsigned long index;
+
+  /* interpret a negative index normally */
+  if (i < 0) {
+    index = self->tree->length + i;
+  } else {
+    index = i;
+  }
+d733 1
+a733 1
+  if (index >= self->tree->length) {
+d763 3
+a765 3
+  /*
+   * Python takes care of negative indices, but someone can still
+   * ask for the -40th element of a 10-element tree
+d768 8
+a775 3
+  if ((ilow < 0) || ((unsigned long) ihigh > self->tree->length)) {
+    PyErr_SetString (PyExc_IndexError, "tree index out of range");
+    return NULL;
+d783 4
+a786 4
+  if (ilow >= ihigh) {
+    new_tree->tree->length = 0;
+    return (PyObject *) new_tree;
+  }
+@
+
+
+2.6
+log
+@updates from Berthold Höllmann:
+  __cplusplus wrap.
+  #include <Python.h> rather than "Python.h"
+  renamed libavl functions with "avl_" prefix
+  avl_tree_slice():
+    if low >= high, return an empty tree.
+  modernized the type definition
+
+from Sam Rushing/IronPort:
+  avl_new_avl_from_list() isn't a visible function,
+   thus it doesn't need a doc string.
+  made many functions static.
+@
+text
+@d28 1
+a28 1
+/* $Id: AVLmodule.c,v 2.5 2005/06/01 23:07:59 rushing Exp rushing $ */
+d118 1
+d120 1
+a120 1
+    if (avl_insert_by_key (self->tree, (void *) val) != 0) {
+d126 1
+a126 2
+      Py_INCREF(Py_None);
+      return Py_None;
+d707 1
+d709 1
+a709 1
+      if (avl_insert_by_key (self_copy->tree, (void *) bb_node->key) != 0) {
+@
+
+
+2.5
+log
+@untabified, removed trailing whitespace
+@
+text
+@d5 1
+d28 1
+a28 1
+/* $Id: AVLmodule.c,v 2.4 1998/10/10 16:16:06 rushing Exp rushing $ */
+d30 2
+d33 3
+a35 2
+#include "Python.h"
+#include "avl.h"
+d76 1
+d119 1
+a119 1
+    if (insert_by_key (self->tree, (void *) val) != 0) {
+d137 1
+d154 1
+a154 1
+    if (remove_by_key (self->tree, (void *) val, avl_tree_key_free_fun) != 0) {
+d182 1
+a182 1
+      result = get_item_by_key (self->tree, (void *) key_val, (void **) &return_value);
+d219 4
+a222 4
+        result = get_span_by_key (self->tree,
+                                  (void *) low_key,
+                                  &low,
+                                  &high);
+d235 5
+a239 5
+        result = get_span_by_two_keys (self->tree,
+                                       (void *) low_key,
+                                       (void *) high_key,
+                                       &low,
+                                       &high);
+d271 3
+a273 3
+      result = get_item_by_key_least (self->tree,
+                                      (void *) key_val,
+                                      (void **) &return_value);
+d307 3
+a309 3
+      result = get_item_by_key_most (self->tree,
+                                     (void *) key_val,
+                                     (void **) &return_value);
+d343 3
+a345 3
+      result = get_item_by_key (self->tree,
+                                (void *) key_val,
+                                (void **) &return_value);
+d374 1
+d418 1
+d435 1
+a435 1
+    new_node = new_avl_node ((void *) 0, parent);
+d440 1
+a440 1
+    SET_RANK (new_node, (midway-low)+1);
+d449 1
+a449 1
+    *node = get_successor (*node);
+d456 1
+a456 1
+      SET_BALANCE (new_node, -1);
+d459 1
+a459 1
+      SET_BALANCE (new_node, +1);
+d462 1
+a462 1
+      SET_BALANCE (new_node, 0);
+d483 1
+d514 5
+a518 5
+    result = iterate_index_range (self->tree,
+                                  slice_callback,
+                                  (unsigned long) ilow,
+                                  (unsigned long) ihigh,
+                                  (void *) list);
+d552 1
+a552 1
+  self = PyObject_NEW(avl_treeobject, &Avl_treetype);
+d557 1
+a557 1
+  self->tree = new_avl_tree (avl_key_compare_for_python, (void *) self);
+d559 1
+a559 1
+    PyMem_DEL (self);
+d572 2
+a573 2
+  free_avl_tree (self->tree, avl_tree_key_free_fun);
+  PyMem_DEL(self);
+d576 1
+d603 2
+a604 1
+static int
+d622 2
+a623 1
+static PyObject *
+d630 2
+a631 1
+static int
+d638 2
+a639 1
+static PyObject *
+d660 1
+a660 1
+      node = get_successor (node);
+d672 2
+a673 1
+static int
+d681 2
+a682 1
+static PyObject *
+d708 1
+a708 1
+      if (insert_by_key (self_copy->tree, (void *) bb_node->key) != 0) {
+d712 1
+a712 1
+      bb_node = get_successor (bb_node);
+d718 2
+a719 1
+static PyObject *
+d726 2
+a727 1
+static PyObject *
+d749 1
+a749 1
+      self->node_cache = get_successor (self->node_cache);
+d753 1
+a753 1
+    if (get_item_by_index (self->tree, index, &value) != 0) {
+d763 2
+a764 1
+static PyObject *
+d786 5
+d795 1
+a795 1
+    if (m < GET_RANK(node)) {
+d797 2
+a798 2
+    } else if (m > GET_RANK(node)) {
+      m = m - GET_RANK(node);
+d836 1
+a836 1
+        "AVL tree",                     /*tp_name*/
+d853 4
+a856 2
+        /* Space for future expansion */
+        0L,0L,0L,0L,
+d863 1
+d869 1
+a869 1
+  avl_node * new_node = new_avl_node(source_node->key, dest_parent);
+d899 2
+a900 1
+static avl_treeobject *
+d932 1
+d949 1
+a949 1
+    new_node = new_avl_node ((void *) item, parent);
+d955 1
+a955 1
+    SET_RANK (new_node, (midway-low)+1);
+d965 1
+a965 1
+      SET_BALANCE (new_node, -1);
+d968 1
+a968 1
+      SET_BALANCE (new_node, +1);
+d971 1
+a971 1
+      SET_BALANCE (new_node, 0);
+d977 1
+a977 2
+static char avl_new_avl_from_list__doc__[] =
+"construct a new avl tree from a list (sorts the list as a side-effect!)";
+d979 2
+a980 1
+static PyObject *
+d1022 2
+a1023 1
+static PyObject *
+d1073 4
+a1076 2
+  /* XXXX Add constants here */
+
+d1078 1
+a1078 1
+  if (PyErr_Occurred())
+d1080 1
+d1082 4
+@
+
+
+2.4
+log
+@matching DECREF for key when a remove fails
+@
+text
+@d1 1
+a1 1
+/* -*- Mode:C; tab-width:8 -*- */
+d5 1
+a5 1
+ * 
+d7 1
+a7 1
+ * 
+d16 1
+a16 1
+ * 
+d27 1
+a27 1
+/* $Id: AVLmodule.c,v 2.3 1997/02/22 00:11:53 rushing Exp rushing $ */
+d43 1
+a43 1
+ * 
+d54 5
+a58 5
+	PyObject_HEAD
+	avl_tree	* tree;
+	avl_node	* node_cache;
+	int		cache_index;
+	PyObject *	compare_function;
+d63 1
+a63 1
+#define is_avl_tree_object(v)	((v)->ob_type == &Avl_treetype)
+d81 1
+a81 1
+    
+d101 1
+a101 1
+static char avl_tree_insert__doc__[] = 
+d126 1
+a126 1
+static char avl_tree_remove__doc__[] = 
+d143 1
+a143 1
+  
+d178 4
+a181 4
+	/* success */
+	Py_INCREF (return_value);
+	Py_DECREF (key_val);
+	return (return_value);
+d183 3
+a185 3
+	Py_DECREF (key_val);
+	PyErr_SetObject (PyExc_KeyError, key_val);
+	return NULL;
+d212 13
+a224 13
+	Py_INCREF (low_key);
+	result = get_span_by_key (self->tree,
+				  (void *) low_key,
+				  &low,
+				  &high);
+	Py_DECREF (low_key);
+	if (result == 0) {
+	  /* success */
+	  return Py_BuildValue ("(ii)", (int) low, (int) high);
+	} else {
+	  PyErr_SetString (ErrorObject, "error while locating key span");
+	  return NULL;
+	}
+d226 17
+a242 17
+	/* they specified two keys */
+	Py_INCREF (low_key);
+	Py_INCREF (high_key);
+	result = get_span_by_two_keys (self->tree,
+				       (void *) low_key,
+				       (void *) high_key,
+				       &low,
+				       &high);
+	Py_DECREF (low_key);
+	Py_DECREF (high_key);
+	if (result == 0) {
+	  /* success */
+	  return Py_BuildValue ("(ii)", (int) low, (int) high);
+	} else {
+	  PyErr_SetString (ErrorObject, "error while locating key span");
+	  return NULL;
+	}
+d266 2
+a267 2
+				      (void *) key_val,
+				      (void **) &return_value);
+d269 4
+a272 4
+	/* success */
+	Py_INCREF (return_value);
+	Py_DECREF (key_val);
+	return (return_value);
+d274 3
+a276 3
+	Py_DECREF (key_val);
+	PyErr_SetObject (PyExc_KeyError, key_val);
+	return NULL;
+d302 2
+a303 2
+				     (void *) key_val,
+				     (void **) &return_value);
+d305 4
+a308 4
+	/* success */
+	Py_INCREF (return_value);
+	Py_DECREF (key_val);
+	return (return_value);
+d310 3
+a312 3
+	Py_DECREF (key_val);
+	PyErr_SetObject (PyExc_KeyError, key_val);
+	return NULL;
+d338 2
+a339 2
+				(void *) key_val,
+				(void **) &return_value);
+d341 3
+a343 3
+	/* success */
+	Py_DECREF (key_val);
+	return (Py_BuildValue ("i", 1));
+d345 2
+a346 2
+	Py_DECREF (key_val);
+	return Py_BuildValue ("i", 0);
+d413 4
+a416 4
+		avl_node * parent,
+		avl_node ** address,
+		unsigned int low,
+		unsigned int high)
+d442 1
+a442 1
+    
+d464 1
+a464 1
+		    PyObject * args)
+d506 4
+a509 4
+				  slice_callback,
+				  (unsigned long) ilow,
+				  (unsigned long) ihigh,
+				  (void *) list);
+d519 9
+a527 9
+  {"insert",	(PyCFunction)avl_tree_insert,		1,	avl_tree_insert__doc__},
+  {"remove",	(PyCFunction)avl_tree_remove,	1,	avl_tree_remove__doc__},
+  {"lookup",	(PyCFunction)avl_tree_lookup,	1,	avl_tree_lookup__doc__},
+  {"has_key",	(PyCFunction)avl_tree_has_key,	1,	avl_tree_has_key__doc__},
+  {"slice_as_list",	(PyCFunction)avl_tree_slice_as_list,1,	avl_tree_slice_as_list__doc__},
+  {"span",	(PyCFunction)avl_tree_span,	1,	avl_tree_span__doc__},
+  {"at_least",	(PyCFunction)avl_tree_at_least,	1,	avl_tree_at_least__doc__},
+  {"at_most",	(PyCFunction)avl_tree_at_most,	1,	avl_tree_at_most__doc__},
+  {"slice_as_tree",	(PyCFunction)avl_tree_from_tree,1,	avl_tree_from_tree__doc__},
+d529 2
+a530 2
+  {"verify",	(PyCFunction)avl_tree_verify,	1,	avl_tree_verify__doc__},
+  {"print_internal_structure",	(PyCFunction)avl_tree_print_internal_structure,	1,	avl_tree_print_internal_structure__doc__},
+d532 1
+a532 1
+  {NULL,		NULL}		/* sentinel */
+d542 1
+a542 1
+	
+d569 2
+a570 2
+		       long * index,
+		       FILE * fp)
+d591 1
+a591 1
+}  
+d614 2
+a615 2
+	/* XXXX Add your own getattr code here */
+	return Py_FindMethod(avl_tree_methods, (PyObject *)self, name);
+d621 2
+a622 2
+	/* XXXX Add your own setattr code here */
+	return -1;
+d643 1
+a643 1
+	PyString_Concat (&s, comma);
+d671 1
+a671 1
+  
+d685 1
+a685 1
+    
+d688 1
+a688 1
+     * them into self_copy 
+d693 2
+a694 2
+	avl_tree_dealloc (self_copy);
+	return NULL;
+d782 4
+a785 4
+		      new_tree->tree->root,
+		      &(new_tree->tree->root->right),
+		      0,
+		      ihigh - ilow) < 0) {
+d794 7
+a800 7
+	(inquiry)avl_tree_length,		/*sq_length*/
+	(binaryfunc)avl_tree_concat,		/*sq_concat*/
+	(intargfunc)avl_tree_repeat,		/*sq_repeat*/
+	(intargfunc)avl_tree_item,		/*sq_item*/
+	(intintargfunc)avl_tree_slice,		/*sq_slice*/
+	(intobjargproc)0,			/*sq_ass_item*/
+	(intintobjargproc)0,			/*sq_ass_slice*/
+d805 1
+a805 1
+static char Avl_treetype__doc__[] = 
+d810 22
+a831 22
+	PyObject_HEAD_INIT(&PyType_Type)
+	0,				/*ob_size*/
+	"AVL tree",			/*tp_name*/
+	sizeof(avl_treeobject),		/*tp_basicsize*/
+	0,				/*tp_itemsize*/
+	/* methods */
+	(destructor)avl_tree_dealloc,	/*tp_dealloc*/
+	(printfunc)avl_tree_print,	/*tp_print*/
+	(getattrfunc)avl_tree_getattr,	/*tp_getattr*/
+	(setattrfunc)avl_tree_setattr,	/*tp_setattr*/
+	(cmpfunc)0,			/*tp_compare*/
+	(reprfunc)avl_tree_repr,	/*tp_repr*/
+	0,				/*tp_as_number*/
+	&avl_tree_as_sequence,		/*tp_as_sequence*/
+	0,			/*tp_as_mapping*/
+	(hashfunc)0,		/*tp_hash*/
+	(ternaryfunc)0,		/*tp_call*/
+	(reprfunc)0,		/*tp_str*/
+
+	/* Space for future expansion */
+	0L,0L,0L,0L,
+	Avl_treetype__doc__ /* Documentation string */
+d839 2
+a840 2
+		   avl_node * dest_parent,
+		   avl_node ** dest_node)
+d851 3
+a853 3
+			     new_node,
+			     &(new_node->left)) != 0) {
+	return -1;
+d860 3
+a862 3
+			     new_node,
+			     &(new_node->right)) != 0) {
+	return -1;
+d876 1
+a876 1
+  
+d881 2
+a882 2
+			   dest->tree->root,
+			   &(dest->tree->root->right)) != 0) {
+d906 4
+a909 4
+		avl_node * parent,
+		avl_node ** address,
+		unsigned int low,
+		unsigned int high)
+d953 1
+a953 1
+		       PyObject * args)
+d974 4
+a977 4
+		      tree->tree->root,
+		      &(tree->tree->root->right),
+		      0,
+		      length) < 0) {
+d994 2
+a995 2
+avl_newavl(PyObject * self,	/* Not used */
+	   PyObject * args)
+d1018 2
+a1019 2
+	{"newavl",	avl_newavl,	1,	avl_newavl__doc__},
+	{NULL,		NULL}		/* sentinel */
+d1024 1
+a1024 1
+static char avl_module_documentation[] = 
+d1035 2
+a1036 2
+		     avl_module_documentation,
+		     (PyObject*)NULL,PYTHON_API_VERSION);
+d1044 1
+a1044 1
+	
+@
+
+
+2.3
+log
+@copyright notice
+@
+text
+@d27 1
+a27 1
+/* $Id: AVLmodule.c,v 2.2 1997/02/21 23:22:57 rushing Exp rushing $ */
+d149 1
+a149 1
+      /* can I legally DECREF val here? */
+@
+
+
+2.2
+log
+@at_least() and at_most() from David Ascher
+@
+text
+@d4 21
+a24 1
+ * Copyright (C) 1995 by Sam Rushing <rushing@@nightmare.com>
+d27 1
+a27 1
+/* $Id: AVLmodule.c,v 2.1 1997/02/21 23:10:13 rushing Exp rushing $ */
+@
+
+
+2.1
+log
+@compare_arg works
+@
+text
+@d7 1
+a7 1
+/* $Id: AVLmodule.c,v 2.0 1996/02/26 06:18:13 rushing Exp rushing $ */
+a55 2
+  fprintf (stderr, "avl_key_compare_for_python, compare_arg:%p\n", compare_arg);
+  fprintf (stderr, "self->compare_function: %p\n", self->compare_function);
+d220 1
+a220 1
+	  PyErr_SetString (ErrorObject, "error while locate key span");
+d230 72
+d505 2
+a522 2
+  fprintf (stderr, "newavl_treeobject: compare_function=%p\n", compare_function);
+
+a527 2
+  fprintf (stderr, "  self=%p\n", self);
+
+d1011 1
+a1011 1
+	PyObject *m, *d;
+d1013 9
+a1021 9
+	/* Create the module and add the functions */
+	m = Py_InitModule4("avl", avl_methods,
+		avl_module_documentation,
+		(PyObject*)NULL,PYTHON_API_VERSION);
+
+	/* Add some symbolic constants to the module */
+	d = PyModule_GetDict(m);
+	ErrorObject = PyString_FromString("avl.error");
+	PyDict_SetItemString(d, "error", ErrorObject);
+d1023 1
+a1023 1
+	/* XXXX Add constants here */
+d1025 3
+a1027 3
+	/* Check for errors */
+	if (PyErr_Occurred())
+		Py_FatalError("can't initialize module avl");
+@
+
+
+2.0
+log
+@revamp with comparison function considered part of the object
+@
+text
+@d7 1
+a7 1
+/* $Id: AVLmodule.c,v 1.10 1995/11/28 20:54:36 rushing Exp rushing $ */
+a10 4
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+a11 3
+#ifdef __cplusplus
+}
+#endif
+d53 1
+a53 1
+avl_key_compare_for_python (avl_tree * tree, void * a, void * b)
+d55 4
+a58 1
+  avl_treeobject * self = (avl_treeobject *) tree->compare_arg;
+d451 2
+d457 4
+a460 1
+  self->tree = new_avl_tree(avl_key_compare_for_python, (void *) self);
+d468 1
+d674 1
+a674 1
+  new_tree = newavl_treeobject(NULL);
+d789 1
+a789 1
+  if (!(dest = newavl_treeobject(NULL))) {
+d868 1
+d872 1
+a872 1
+  if (!PyArg_ParseTuple (args, "O!", &PyList_Type, &list)) {
+d880 1
+a880 1
+  tree = newavl_treeobject(NULL);
+d902 1
+d916 1
+a916 1
+    return (PyObject *) newavl_treeobject(compare_function);
+@
+
+
+1.10
+log
+@implemented node caching for inorder iteration.
+@
+text
+@d7 1
+a7 1
+/* $Id: AVLmodule.c,v 1.9 1995/11/28 20:34:54 rushing Exp rushing $ */
+d45 1
+d53 1
+a53 1
+static avl_treeobject * newavl_treeobject(void);
+d57 28
+a85 1
+/* ---------------------------------------------------------------- */
+d100 1
+a100 3
+    if (insert_by_key (self->tree,
+		       (void *) val,
+		       (int(*)(void *, void *)) PyObject_Compare) != 0) {
+d134 1
+a134 4
+    if (remove_by_key (self->tree,
+		       (void *) val,
+		       (int(*)(void *, void *)) PyObject_Compare,
+		       avl_tree_key_free_fun) != 0) {
+d162 1
+a162 4
+      result = get_item_by_key (self->tree,
+				(void *) key_val,
+				(int(*)(void *, void *)) PyObject_Compare,
+				(void **) &return_value);
+a200 1
+				  (int(*)(void *, void *)) PyObject_Compare,
+a217 1
+				       (int(*)(void *, void*)) PyObject_Compare,
+a252 1
+				(int(*)(void *, void *)) PyObject_Compare,
+a309 50
+static char avl_tree_iterate__doc__[] = 
+"Iterate <callback_function> over all the tree's items"
+;
+
+int
+avl_tree_iterate_do_callback (void * item, void * callback_function)
+{
+  PyObject * arglist;
+  PyObject * result;
+
+  arglist = Py_BuildValue ("(O)", (PyObject *) item);
+  if (!arglist) {
+    return -1;
+  }
+  result = PyEval_CallObject ((PyObject *) callback_function, arglist);
+  Py_DECREF (arglist);
+  if (!result) {
+    return -1;
+  } else {
+    Py_DECREF (result);
+    return 0;
+  }
+}
+
+/*
+ * I don't think this is worth it - my testing shows that
+ * 'for x in tree' is faster than using 'tree.iterate(callback)'  Why?
+ */
+
+static PyObject *
+avl_tree_iterate(avl_treeobject *self, PyObject *args)
+{
+  PyObject * callback_function;
+  int result;
+
+  if (!PyArg_ParseTuple(args, "O!", &PyFunction_Type, &callback_function)) {
+    return NULL;
+  } else {
+    result = iterate_inorder (self->tree,
+			      (int (*)(void *, void *)) avl_tree_iterate_do_callback,
+			      (void *) callback_function);
+    if (result != 0) {
+      return NULL;
+    } else {
+      Py_INCREF (Py_None);
+      return Py_None;
+    }
+  }
+}
+
+a434 1
+  {"iterate",	(PyCFunction)avl_tree_iterate,	1,	avl_tree_iterate__doc__},
+d451 1
+a451 1
+newavl_treeobject(void)
+d459 1
+a459 1
+  self->tree = new_avl_tree();
+d466 1
+d602 1
+a602 3
+      if (insert_by_key (self_copy->tree,
+			 (void *) bb_node->key,
+			 (int(*)(void *, void *)) PyObject_Compare) != 0) {
+a607 1
+    self_copy->tree->length += bb->tree->length;
+d672 1
+a672 1
+  new_tree = newavl_treeobject();
+d787 1
+a787 1
+  if (!(dest = newavl_treeobject())) {
+d877 1
+a877 1
+  tree = newavl_treeobject();
+d906 3
+a908 1
+  if (!PyArg_ParseTuple(args, "|O", &arg)) {
+d911 2
+a912 2
+  if (!arg) {
+    return (PyObject *) newavl_treeobject();
+@
+
+
+1.9
+log
+@new method: span()
+@
+text
+@d7 1
+a7 1
+/* $Id: AVLmodule.c,v 1.8 1995/11/23 02:24:55 rushing Exp rushing $ */
+a8 7
+/*
+ * IDEA: use an 'index cache' where whenever a lookup is done
+ * by index, cache the resultant node, so that if the next lookup
+ * is simply <i+1>, we just get_successor() to find it.
+ * Of course, invalidate this node cache whenever there's been
+ * an insertion or deletion.
+ */
+d26 14
+d42 3
+a44 1
+	avl_tree * tree;
+d79 1
+d116 1
+d498 2
+d674 7
+@
+
+
+1.8
+log
+@removed the from_list function
+@
+text
+@d7 9
+a15 1
+/* $Id: AVLmodule.c,v 1.7 1995/11/23 02:15:21 rushing Exp rushing $ */
+d150 57
+d461 1
+@
+
+
+1.7
+log
+@# ansification, unsigned/signed comparison fix
+@
+text
+@d7 1
+a7 1
+/* $Id: AVLmodule.c,v 1.6 1995/11/23 02:13:08 rushing Exp rushing $ */
+a874 1
+	{"from_list",	avl_new_avl_from_list,	1,	avl_new_avl_from_list__doc__},
+@
+
+
+1.6
+log
+@avl_tree_concat(): return self_copy directly if bb is empty.
+@
+text
+@d7 1
+a7 1
+/* $Id: AVLmodule.c,v 1.5 1995/11/23 02:08:07 rushing Exp rushing $ */
+d570 1
+a570 3
+avl_tree_repeat(self, n)
+	avl_treeobject *self;
+	int n;
+d617 1
+a617 1
+  if ((ilow < 0) || (ihigh > self->tree->length)) {
+@
+
+
+1.5
+log
+@added slice_as_list()
+added slice_as_tree()
+__getslice__ returns a new tree
+avl.newavl() accepts optional list or tree
+@
+text
+@d7 1
+a7 1
+/* $Id: AVLmodule.c,v 1.4 1995/11/22 01:26:56 rushing Exp rushing $ */
+a564 1
+    return (PyObject *) self_copy;
+d566 1
+@
+
+
+1.4
+log
+@moved an INCREF in avl_tree_insert()
+new implementation of __repr__ that doesn't
+  create a list object. (uses get_successor)
+deleted the inorder_list() functions.
+@
+text
+@d1 2
+d7 1
+a7 1
+/* $Id: AVLmodule.c,v 1.3 1995/11/16 22:47:20 rushing Exp rushing $ */
+d32 7
+d267 122
+d395 2
+d528 50
+d579 1
+a579 1
+avl_tree_item(avl_treeobject *self, int i)
+a606 8
+int
+slice_callback (unsigned long index, void * key, void * arg)
+{
+  /* arg is a list template */
+  Py_INCREF ((PyObject *) key);
+  return (PyList_SetItem ((PyObject *)arg, (int) index, (PyObject *) key));
+}
+
+d610 3
+a612 2
+  PyObject * list;
+  int result;
+d623 3
+a625 1
+  if (!(list = PyList_New (ihigh - ilow))) {
+d628 12
+a639 9
+  if (ihigh - ilow) {
+    result = iterate_index_range (self->tree,
+				  slice_callback,
+				  (unsigned long) ilow,
+				  (unsigned long) ihigh,
+				  (void *) list);
+    if (result != 0) {
+      PyErr_SetString (ErrorObject, "error while accessing slice");
+      return NULL;
+d642 11
+a652 1
+  return list;
+d657 2
+a658 2
+	(binaryfunc)0,				/*sq_concat*/
+	(intargfunc)0,				/*sq_repeat*/
+d679 1
+a679 1
+	(printfunc)avl_tree_print,		/*tp_print*/
+d682 3
+a684 3
+	(cmpfunc)0,		/*tp_compare*/
+	(reprfunc)avl_tree_repr,		/*tp_repr*/
+	0,			/*tp_as_number*/
+d686 1
+a686 1
+	0,		/*tp_as_mapping*/
+d699 6
+d706 27
+a732 3
+static char avl_newavl__doc__[] =
+"Create a new (and empty) tree"
+;
+d734 2
+a735 3
+static PyObject *
+avl_newavl(PyObject * self,	/* Not used */
+	   PyObject * args)
+d737 3
+a739 1
+  if (!PyArg_ParseTuple(args, ""))
+d741 13
+a753 1
+  return (PyObject *) newavl_treeobject();
+a755 1
+
+d761 5
+d814 1
+a814 1
+avl_new_avl_from_list (PyObject * self,
+d846 26
+@
+
+
+1.3
+log
+@documentation strings
+added has_key()
+@
+text
+@d5 1
+a5 1
+/* $Id: AVLmodule.c,v 1.2 1995/11/16 10:02:30 rushing Exp rushing $ */
+d45 1
+d49 1
+a52 1
+      Py_INCREF(val);
+a355 14
+void
+avl_tree_inorder_list_helper (PyObject * list,
+			      long * index,
+			      avl_node * node)
+{
+  if (node->left) {
+    avl_tree_inorder_list_helper (list, index, node->left);
+  }
+  PyList_SetItem (list, (*index)++, (PyObject *)node->key);
+  if (node->right) {
+    avl_tree_inorder_list_helper (list, index, node->right);    
+  }
+}
+
+d357 1
+a357 1
+avl_tree_inorder_list (avl_treeobject * self)
+d359 4
+a362 2
+  PyObject * list;
+  long index = 0;
+a363 4
+  list = PyList_New (self->tree->length);
+  if (!list) {
+    return NULL;
+  }
+d365 17
+a381 14
+    avl_tree_inorder_list_helper (list, &index, self->tree->root->right);
+  }
+  return list;
+}
+
+static PyObject *
+avl_tree_repr (avl_treeobject *self)
+{
+  PyObject *s = NULL;
+  PyObject *inorder_list;
+	
+  inorder_list = avl_tree_inorder_list (self);
+  if (!inorder_list) {
+    return NULL;
+d383 1
+a383 7
+    s = (PyObject *) PyObject_Repr (inorder_list);
+    Py_DECREF (inorder_list);
+    if (!s) {
+      return NULL;
+    } else {
+      return s;
+    }
+@
+
+
+1.2
+log
+@added 'from_list'
+various glitches caught by the MS compiler
+@
+text
+@d5 1
+a5 1
+/* $Id: AVLmodule.c,v 1.1 1995/11/15 20:41:43 rushing Exp rushing $ */
+d59 1
+a59 1
+"remove an item from the AVL tree"
+d96 1
+a96 1
+"return the first object comparing equal to the <key> argument";
+d132 34
+d262 1
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@d5 1
+a5 1
+/* $Id: $ */
+d9 3
+d13 3
+d38 1
+a38 3
+avl_tree_insert(self, args)
+	avl_treeobject *self;
+	PyObject *args;
+d72 1
+a72 3
+avl_tree_remove(self, args)
+	avl_treeobject *self;
+	PyObject *args;
+d99 1
+a99 3
+avl_tree_lookup (self, args)
+     avl_treeobject * self;
+     PyObject * args;
+d137 1
+a137 3
+avl_tree_verify (self, args)
+     avl_treeobject * self;
+     PyObject * args;
+d164 1
+a164 3
+avl_tree_print_internal_structure (self, args)
+     avl_treeobject * self;
+     PyObject * args;
+d203 1
+a203 3
+avl_tree_iterate(self, args)
+	avl_treeobject *self;
+	PyObject *args;
+d224 4
+a227 4
+  {"insert",	avl_tree_insert,		1,	avl_tree_insert__doc__},
+  {"remove",	avl_tree_remove,	1,	avl_tree_remove__doc__},
+  {"iterate",	avl_tree_iterate,	1,	avl_tree_iterate__doc__},
+  {"lookup",	avl_tree_lookup,	1,	avl_tree_lookup__doc__},
+d229 2
+a230 2
+  {"verify",	avl_tree_verify,	1,	avl_tree_verify__doc__},
+  {"print_internal_structure",	avl_tree_print_internal_structure,	1,	avl_tree_print_internal_structure__doc__},
+d256 1
+a256 2
+avl_tree_dealloc(self)
+	avl_treeobject *self;
+a266 1
+  int result;
+d289 1
+a289 4
+avl_tree_print(self, fp, flags)
+	avl_treeobject *self;
+	FILE *fp;
+	int flags;
+d307 1
+a307 3
+avl_tree_getattr(self, name)
+	avl_treeobject *self;
+	char *name;
+d314 1
+a314 4
+avl_tree_setattr(self, name, v)
+	avl_treeobject *self;
+	char *name;
+	PyObject *v;
+d328 1
+a328 1
+  PyList_SetItem (list, (*index)++, node->key);
+d351 1
+a351 2
+avl_tree_repr(self)
+     avl_treeobject *self;
+d373 1
+a373 2
+avl_tree_length(self)
+	avl_treeobject *self;
+d379 1
+a379 3
+avl_tree_item(self, i)
+	avl_treeobject *self;
+	int i;
+d416 1
+a416 3
+avl_tree_slice(self, ilow, ihigh)
+	avl_treeobject *self;
+	int ilow, ihigh;
+d433 10
+a442 10
+  result = iterate_index_range (self->tree,
+				slice_callback,
+				(unsigned long) ilow,
+				(unsigned long) ihigh,
+				(void *) list);
+  if (result != 0) {
+    PyErr_SetString (ErrorObject, "error while accessing slice");
+    return NULL;
+  } else {
+    return list;
+d444 1
+d480 1
+a480 1
+	(binaryfunc)0,		/*tp_call*/
+d497 2
+a498 3
+avl_newavl(self, args)
+     PyObject *self;	/* Not used */
+     PyObject *args;
+d505 87
+d596 1
+d607 1
+a607 1
+initavl()
+@

@@ -1,0 +1,101 @@
+
+AVLmodule.c,1567
+static PyObject *ErrorObject;38,1367
+#define PyDoc_VAR(PyDoc_VAR41,1416
+#define PyDoc_STR(PyDoc_STR42,1467
+#define PyDoc_STRVAR(PyDoc_STRVAR43,1505
+} avl_treeobject;avl_treeobject70,2570
+staticforward PyTypeObject Avl_treetype;72,2589
+#define is_avl_tree_object(is_avl_tree_object74,2631
+avl_key_compare_for_python 85,3026
+avl_tree_insert(118,3849
+avl_tree_key_free_fun 147,4455
+avl_tree_remove 154,4557
+avl_tree_lookup 178,5110
+avl_tree_span 211,5866
+avl_tree_at_least 261,7297
+avl_tree_at_most 296,8125
+avl_tree_has_key 330,8927
+avl_tree_verify 362,9663
+avl_tree_key_printer 374,9918
+avl_tree_print_internal_structure 392,10335
+tree_from_tree 418,10967
+static char avl_tree_from_tree__doc__[466,12233
+avl_tree_from_tree 469,12338
+slice_callback 488,12719
+static char avl_tree_slice_as_list__doc__[495,12923
+avl_tree_slice_as_list 498,13028
+static struct PyMethodDef avl_tree_methods[545,14239
+newavl_treeobject 566,15391
+avl_tree_dealloc(588,15869
+avl_tree_print_helper 596,16003
+avl_tree_print(623,16515
+avl_tree_getattr(642,16845
+avl_tree_setattr(650,17034
+avl_tree_repr 658,17190
+avl_tree_length 692,17988
+avl_tree_concat 701,18116
+avl_tree_repeat(739,19006
+avl_tree_item 747,19156
+avl_tree_slice 780,20073
+static PySequenceMethods avl_tree_as_sequence 837,21598
+static PyTypeObject Avl_treetype 854,22305
+avl_copy_avl_node 886,23613
+avl_copy_avl_tree 922,24540
+tree_from_list 955,25276
+avl_new_avl_from_list 1002,26559
+avl_newavl(1046,27774
+static struct PyMethodDef avl_methods[1069,28465
+initavl(1082,28870
+
+avl.c,919
+avl_new_avl_node 41,1479
+avl_new_avl_tree 60,1860
+free_avl_tree_helper 83,2333
+avl_free_avl_tree 96,2617
+avl_insert_by_key 108,2846
+avl_get_item_by_index 287,7282
+avl_get_item_by_key 310,7746
+avl_remove_by_key 340,8334
+iterate_inorder_helper 615,15995
+avl_iterate_inorder 640,16543
+avl_get_predecessor 655,16848
+avl_get_successor 677,17224
+avl_iterate_index_range 701,17667
+avl_get_index_by_key 745,18779
+avl_get_span_by_key 786,19630
+avl_get_span_by_two_keys 836,20882
+avl_get_item_by_key_most 892,22239
+avl_get_item_by_key_least 936,23241
+#define MAX(MAX977,24275
+avl_verify_balance 980,24323
+avl_verify_parent 1000,24802
+avl_verify_rank 1015,25113
+avl_verify 1038,25596
+typedef struct _avl_link_node _avl_link_node1054,26012
+} avl_link_node;avl_link_node1058,26144
+avl_default_key_printer 1061,26166
+avl_print_connectors 1074,26486
+avl_print_node 1101,27133
+avl_print_tree 1137,28043
+
+avl.h,673
+typedef struct avl_node_tag avl_node_tag13,268
+} avl_node;avl_node24,619
+#define AVL_GET_BALANCE(AVL_GET_BALANCE26,632
+#define AVL_GET_RANK(AVL_GET_RANK28,706
+#define AVL_SET_BALANCE(AVL_SET_BALANCE30,762
+#define AVL_SET_RANK(AVL_SET_RANK34,880
+typedef int (*avl_key_compare_fun_type)avl_key_compare_fun_type40,1005
+typedef int (*avl_iter_fun_type)avl_iter_fun_type41,1087
+typedef int (*avl_iter_index_fun_type)avl_iter_index_fun_type42,1158
+typedef int (*avl_free_key_fun_type)avl_free_key_fun_type43,1249
+typedef int (*avl_key_printer_fun_type)avl_key_printer_fun_type44,1303
+typedef struct _avl_tree _avl_tree51,1483
+} avl_tree;avl_tree56,1678
+
+test.c,74
+compare_ints 7,62
+int_printer 23,274
+null_key_free 29,367
+main 34,415
